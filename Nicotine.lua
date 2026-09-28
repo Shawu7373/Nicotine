@@ -1,7 +1,7 @@
 --// ====================================================================
---// NICOTINE v1.2
+--// NICOTINE
 --// Made by: Shaw | Discord: Shaw6000
---// Auto F3X Grab (Giver-based) + Reteleport Protection
+--// F3X Auto Grab + Reteleport Protection
 --// ====================================================================
 
 print("[Nicotine] Loading...")
@@ -15,10 +15,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
-local TextChatService = game:GetService("TextChatService")
-local Chat = game:GetService("Chat")
 local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LP = Players.LocalPlayer
 local PG = LP:WaitForChild("PlayerGui", 15)
@@ -77,15 +74,12 @@ local S = {
     PrevPosition = nil,
     Threshold = 30,
     Conn = {},
-    LastRequest = 0,
-    LastNotify = 0,
-    GiverPart = nil
+    LastNotify = 0
 }
 
 local function getChar() return LP.Character end
 local function getHum() local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid") end
 local function getRoot() local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart") end
-local function getHead() local c = getChar(); return c and c:FindFirstChild("Head") end
 local function getBackpack() return LP:FindFirstChild("Backpack") end
 
 local function trk(c) table.insert(S.Conn, c); return c end
@@ -93,175 +87,177 @@ local function trk(c) table.insert(S.Conn, c); return c end
 -- ============================================================
 -- F3X TOOL DETECTION
 -- ============================================================
+local TOOL_KEYWORDS = {"building","f3x","btool","b tools","hammer","move","clone","destroy","import","wrench","lpi"}
+
 local function isF3XTool(obj)
     if not obj or not obj:IsA("Tool") then return false end
     local n = obj.Name:lower()
-    return n:find("building") or n:find("f3x") or n:find("btool") or n:find("b tools") or n:find("hammer")
+    for _, kw in ipairs(TOOL_KEYWORDS) do
+        if n:find(kw) then return true end
+    end
+    return false
 end
 
-local function findF3XInCharacter()
-    local char = getChar()
-    if not char then return nil end
-    for _, obj in ipairs(char:GetChildren()) do
-        if isF3XTool(obj) then return obj end
+local function findF3XInChar()
+    local c = getChar(); if not c then return nil end
+    for _, o in ipairs(c:GetChildren()) do
+        if isF3XTool(o) then return o end
     end
     return nil
 end
 
-local function findF3XInBackpack()
-    local bp = getBackpack()
-    if not bp then return nil end
-    for _, obj in ipairs(bp:GetChildren()) do
-        if isF3XTool(obj) then return obj end
+local function findF3XInBP()
+    local bp = getBackpack(); if not bp then return nil end
+    for _, o in ipairs(bp:GetChildren()) do
+        if isF3XTool(o) then return o end
     end
     return nil
 end
 
 local function findF3XAnywhere()
-    return findF3XInCharacter() or findF3XInBackpack()
+    return findF3XInChar() or findF3XInBP()
 end
 
 local function equipF3X()
-    local tool = findF3XAnywhere()
-    if not tool then return false end
-    local hum = getHum()
-    if hum then
-        pcall(function() hum:EquipTool(tool) end)
-        return true
-    end
+    local t = findF3XAnywhere()
+    if not t then return false end
+    local h = getHum()
+    if h then pcall(function() h:EquipTool(t) end); return true end
     return false
 end
 
 -- ============================================================
--- GIVER FINDER (MAIN METHOD)
+-- GIVER FINDER
 -- ============================================================
-local function isF3XGiver(obj)
+local GIVER_KEYWORDS = {"giver","f3x","btool","b tools","building","wrench","lpi","import"}
+
+local function partMatches(obj)
     if not obj or not obj:IsA("BasePart") then return false end
     local n = obj.Name:lower()
-    return n:find("f3x") or n:find("btool") or n:find("b tools") or n:find("giver") or n:find("building")
-end
-
-local function findF3XGiver()
-    -- Search workspace for F3X giver
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if isF3XGiver(obj) then
-            -- Prefer parts with "f3x" or "building" specifically
-            local n = obj.Name:lower()
-            if n:find("f3x") or n:find("building") or n:find("btool") then
-                return obj
-            end
+    for _, kw in ipairs(GIVER_KEYWORDS) do
+        if n:find(kw) then return true end
+    end
+    for _, child in ipairs(obj:GetChildren()) do
+        local cn = child.Name:lower()
+        for _, kw in ipairs(GIVER_KEYWORDS) do
+            if cn:find(kw) then return true end
         end
     end
-    -- Fallback: any giver part
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if isF3XGiver(obj) then return obj end
-    end
-    return nil
-end
-
-local function teleportToGiver()
-    local giver = S.GiverPart or findF3XGiver()
-    if not giver then return false end
-    S.GiverPart = giver
-
-    local root = getRoot()
-    if not root then return false end
-
-    -- Save current position, teleport to giver, then it auto-touches
-    pcall(function()
-        root.CFrame = giver.CFrame + Vector3.new(0, 2, 0)
-    end)
-
-    -- Wait a moment for the touch to register
-    task.wait(0.4)
-
-    -- Move away slightly so we're not stuck inside
-    pcall(function()
-        root.CFrame = giver.CFrame + Vector3.new(0, 2, 5)
-    end)
-
-    return true
-end
-
--- ============================================================
--- CHAT COMMAND (FALLBACK)
--- ============================================================
-local function tryChatCommand()
-    if tick() - S.LastRequest < 3 then return false end
-    S.LastRequest = tick()
-
-    local head = getHead()
-    if not head then return false end
-
-    local sent = false
-
-    -- Try TextChatService first
-    pcall(function()
-        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            local channels = TextChatService:FindFirstChild("TextChannels")
-            if channels then
-                local general = channels:FindFirstChild("RBXGeneral")
-                if general and general.SendAsync then
-                    general:SendAsync(":f3x")
-                    sent = true
-                end
-            end
-        end
-    end)
-
-    -- Legacy fallback
-    if not sent then
-        pcall(function()
-            Chat:Chat(head, ":f3x")
-        end)
-    end
-
-    return true
-end
-
--- ============================================================
--- MAIN AUTO-GRAB LOGIC
--- ============================================================
-local function attemptGrab()
-    -- Already have it? Just equip it.
-    if findF3XAnywhere() then
-        local charTool = findF3XInCharacter()
-        if not charTool then equipF3X() end
-        return true
-    end
-
-    -- No tool in inventory — try the giver first (most reliable)
-    if teleportToGiver() then
-        task.wait(0.3)
-        if findF3XAnywhere() then
-            equipF3X()
-            return true
-        end
-    end
-
-    -- Giver didn't work — try chat command
-    if tryChatCommand() then
-        task.wait(0.5)
-        if findF3XAnywhere() then
-            equipF3X()
-            return true
-        end
-    end
-
     return false
 end
 
+local function findF3XGivers()
+    local found = {}
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if partMatches(obj) then table.insert(found, obj) end
+    end
+    return found
+end
+
+-- ============================================================
+-- TOUCH GIVER
+-- ============================================================
+local function touchGiver(giver)
+    local root = getRoot()
+    if not root or not giver then return false end
+
+    if type(firetouchinterest) == "function" then
+        pcall(function()
+            firetouchinterest(giver, root, 0)
+            task.wait(0.05)
+            firetouchinterest(giver, root, 1)
+        end)
+        return true
+    end
+    return false
+end
+
+-- ============================================================
+-- GRAB AND RETURN (the button you asked for)
+-- ============================================================
+local function grabAndReturn()
+    local root = getRoot()
+    if not root then notify("Nicotine", "No character", 2); return end
+
+    -- If already have F3X, just equip and finish
+    if findF3XAnywhere() then
+        if not findF3XInChar() then equipF3X() end
+        notify("Nicotine", "Already have F3X", 2)
+        return
+    end
+
+    -- Find giver
+    local givers = findF3XGivers()
+    if #givers == 0 then
+        notify("Nicotine", "No F3X giver found in map", 4)
+        return
+    end
+
+    -- Save current position
+    local savedCFrame = root.CFrame
+    notify("Nicotine", "Grabbing F3X...", 2)
+
+    -- Try each giver
+    for _, giver in ipairs(givers) do
+        -- Teleport onto giver
+        pcall(function()
+            root.CFrame = giver.CFrame + Vector3.new(0, 3, 0)
+        end)
+
+        task.wait(0.2)
+
+        -- Fire touch interest
+        touchGiver(giver)
+        task.wait(0.3)
+
+        -- Did we get it?
+        if findF3XAnywhere() then
+            equipF3X()
+            -- Return to saved position
+            task.wait(0.2)
+            pcall(function()
+                root.CFrame = savedCFrame
+            end)
+            notify("Nicotine", "F3X grabbed and returned!", 3)
+            return
+        end
+    end
+
+    -- Failed — return to saved position anyway
+    pcall(function()
+        root.CFrame = savedCFrame
+    end)
+    notify("Nicotine", "Couldn't grab F3X. Try again.", 4)
+end
+
+-- ============================================================
+-- AUTO F3X LOOP (background)
+-- ============================================================
 local function autoF3XLoop()
-    local warned = false
     while S.AutoF3X do
-        task.wait(1)
+        task.wait(2)
         if not findF3XAnywhere() then
-            attemptGrab()
-        else
-            -- Already have it — make sure it's equipped
-            if not findF3XInCharacter() then
-                equipF3X()
+            -- Silent auto grab (no return — just teleport to giver)
+            local givers = findF3XGivers()
+            if #givers > 0 then
+                for _, giver in ipairs(givers) do
+                    local root = getRoot()
+                    if root then
+                        pcall(function()
+                            root.CFrame = giver.CFrame + Vector3.new(0, 3, 0)
+                        end)
+                        task.wait(0.3)
+                        touchGiver(giver)
+                        task.wait(0.3)
+                    end
+                    if findF3XAnywhere() then
+                        equipF3X()
+                        break
+                    end
+                end
             end
+        else
+            if not findF3XInChar() then equipF3X() end
         end
     end
 end
@@ -279,36 +275,32 @@ local function retpLoop()
         end
 
         local currentPos = root.Position
-
         if S.PrevPosition then
             local delta = (currentPos - S.PrevPosition).Magnitude
             if delta > S.Threshold then
                 local offset = S.PrevPosition - currentPos
                 pcall(function() root.CFrame = root.CFrame + offset end)
-
                 if tick() - S.LastNotify > 2 then
                     S.LastNotify = tick()
                     notify("Reteleport", "Teleport blocked!", 2)
                 end
-
                 S.PrevPosition = root.Position
                 continue
             end
         end
-
         S.PrevPosition = currentPos
     end
 end
 
 -- ============================================================
--- UI
+-- UI (RAYFIELD)
 -- ============================================================
 print("[Nicotine] Building UI...")
 
 local Window = Rayfield:CreateWindow({
     Name = "Nicotine",
     LoadingTitle = "Nicotine",
-    LoadingSubtitle = "v1.2",
+    LoadingSubtitle = "nicotine",
     ConfigurationSaving = { Enabled = true, FolderName = "Nicotine", FileName = "Config" },
     KeySystem = false,
     ToggleUIKeybind = "K"
@@ -319,53 +311,26 @@ local InfoTab = Window:CreateTab("Info", 4483362458)
 
 MainTab:CreateSection("F3X Tools")
 
+MainTab:CreateButton({
+    Name = "Grab F3X & Return",
+    Callback = function()
+        grabAndReturn()
+    end
+})
+
 MainTab:CreateToggle({
-    Name = "Auto Grab F3X Tool",
+    Name = "Auto Grab F3X Tool (background)",
     CurrentValue = false,
     Flag = "AutoF3X",
     Callback = function(v)
         S.AutoF3X = v
         if v then
             task.spawn(autoF3XLoop)
-            notify("F3X", "Auto-grab ON", 2)
+            notify("Nicotine", "Auto F3X ON", 2)
         else
-            notify("F3X", "Auto-grab OFF", 2)
+            notify("Nicotine", "Auto F3X OFF", 2)
         end
     end
-})
-
-MainTab:CreateButton({
-    Name = "Grab F3X Now (manual)",
-    Callback = function()
-        S.LastRequest = 0
-        if attemptGrab() then
-            notify("F3X", "F3X acquired!", 3)
-        else
-            notify("F3X", "Could not find F3X. Try touching the giver manually.", 4)
-        end
-    end
-})
-
-MainTab:CreateButton({
-    Name = "Find and TP to F3X Giver",
-    Callback = function()
-        local giver = findF3XGiver()
-        if giver then
-            S.GiverPart = giver
-            notify("F3X", "Giver found: " .. giver.Name, 3)
-            pcall(function()
-                local root = getRoot()
-                if root then root.CFrame = giver.CFrame + Vector3.new(0, 3, 5) end
-            end)
-        else
-            notify("F3X", "No F3X giver found in workspace", 4)
-        end
-    end
-})
-
-MainTab:CreateParagraph({
-    Title = "How Auto Grab works",
-    Content = "1. Finds the F3X giver in the map and touches it\n2. If no giver, tries the :f3x chat command\n3. Auto-equips the tool once acquired\n4. Re-acquires on respawn"
 })
 
 MainTab:CreateSection("Reteleport Protection")
@@ -379,10 +344,10 @@ MainTab:CreateToggle({
         if v then
             S.PrevPosition = nil
             task.spawn(retpLoop)
-            notify("Reteleport", "ON", 3)
+            notify("Nicotine", "Reteleport ON", 2)
         else
             S.PrevPosition = nil
-            notify("Reteleport", "OFF", 2)
+            notify("Nicotine", "Reteleport OFF", 2)
         end
     end
 })
@@ -397,24 +362,25 @@ MainTab:CreateSlider({
     Callback = function(v) S.Threshold = v end
 })
 
+MainTab:CreateParagraph({
+    Title = "How Reteleport works",
+    Content = "Tracks your position every frame. If you move more than the threshold in one frame, you snap back to where you were."
+})
+
 InfoTab:CreateSection("About")
-InfoTab:CreateParagraph({ Title = "Nicotine v1.2", Content = "Auto F3X grab (giver-based) + Reteleport protection." })
+InfoTab:CreateParagraph({ Title = "Nicotine", Content = "F3X Auto Grab + Reteleport Protection" })
 InfoTab:CreateSection("Credits")
 InfoTab:CreateParagraph({ Title = "Made by", Content = "Shaw" })
 InfoTab:CreateParagraph({ Title = "Discord", Content = "Shaw6000" })
-
--- Character respawn
-trk(LP.CharacterAdded:Connect(function(char)
-    local root = char:WaitForChild("HumanoidRootPart", 5)
-    local hum = char:WaitForChild("Humanoid", 5)
-    if not root or not hum then return end
-    S.PrevPosition = nil
-    S.LastRequest = 0
-    if S.AutoF3X then
-        task.wait(1)
-        attemptGrab()
-    end
-end))
+InfoTab:CreateSection("How to use")
+InfoTab:CreateParagraph({
+    Title = "Grab F3X & Return",
+    Content = "Click the button. It teleports you to the F3X giver, grabs the tool, then returns you to where you were standing."
+})
+InfoTab:CreateParagraph({
+    Title = "Auto Grab",
+    Content = "Toggle on for background grabbing. If you die or lose the tool, it re-acquires it automatically."
+})
 
 -- ============================================================
 -- CLEANUP
