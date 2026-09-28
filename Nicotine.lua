@@ -5,6 +5,7 @@ if getgenv().Nicotine then pcall(getgenv().Nicotine) end
 getgenv().Nicotine = function() end
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local StarterGui = game:GetService("StarterGui")
 local LP = Players.LocalPlayer
@@ -50,10 +51,27 @@ for i, u in ipairs(srcs) do
 end
 if not Rayfield then notify("Nicotine", "UI failed", 10); return end
 
-local function getRoot() local c = LP.Character; return c and c:FindFirstChild("HumanoidRootPart") end
-local function getHum() local c = LP.Character; return c and c:FindFirstChildOfClass("Humanoid") end
+-- ============================================================
+-- STATE
+-- ============================================================
+local S = {
+    InfJump = false,
+    ESP = false,
+    Conn = {},
+    ESPObjects = {},
+    CanInfJump = true  -- cooldown to prevent spam
+}
+
+local function getChar() return LP.Character end
+local function getHum() local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid") end
+local function getRoot() local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart") end
 local function getBP() return LP:FindFirstChild("Backpack") end
 
+local function trk(c) table.insert(S.Conn, c); return c end
+
+-- ============================================================
+-- F3X GRAB & RETURN
+-- ============================================================
 local TOOL_KW = {"building","f3x","btool","b tools","hammer","move","clone","destroy","import","wrench","lpi"}
 local GIVER_KW = {"giver","f3x","btool","b tools","building","wrench","lpi","import"}
 
@@ -118,7 +136,7 @@ local function grabAndReturn()
     if not root then notify("Nicotine", "No character", 2); return end
 
     if hasF3X() then
-        if not equipF3X() then notify("Nicotine", "F3X equipped", 2) end
+        equipF3X()
         notify("Nicotine", "Already have F3X", 2)
         return
     end
@@ -147,6 +165,111 @@ local function grabAndReturn()
     notify("Nicotine", "Failed. Try again.", 4)
 end
 
+-- ============================================================
+-- INFINITE JUMP
+-- Only fires when airborne and only once per jump cycle.
+-- Uses JumpRequest listener so it only triggers on real input.
+-- ============================================================
+trk(game:GetService("UserInputService").JumpRequest:Connect(function()
+    if not S.InfJump then return end
+    local h = getHum()
+    if not h then return end
+    -- Only fire if we're in the air (falling/jumping) to avoid double-jumps on ground
+    local state = h:GetState()
+    if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping then
+        if S.CanInfJump then
+            S.CanInfJump = false
+            pcall(function() h:ChangeState(Enum.HumanoidStateType.Jumping) end)
+            task.delay(0.15, function() S.CanInfJump = true end)
+        end
+    end
+end))
+
+-- ============================================================
+-- ESP
+-- ============================================================
+local function makeESP(target, color)
+    if not target or S.ESPObjects[target] then return end
+    local root = target:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local hl = Instance.new("Highlight")
+    hl.Name = "NicotineESP"
+    hl.Adornee = target
+    hl.FillColor = color
+    hl.FillTransparency = 0.5
+    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+    hl.OutlineTransparency = 0
+    hl.Parent = target
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "NicotineESPLabel"
+    bb.Adornee = root
+    bb.Size = UDim2.new(0, 200, 0, 40)
+    bb.StudsOffset = Vector3.new(0, 3, 0)
+    bb.AlwaysOnTop = true
+    bb.Parent = target
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3 = color
+    lbl.TextStrokeTransparency = 0
+    lbl.TextScaled = true
+    lbl.Font = Enum.Font.GothamBold
+    lbl.Text = target.Name
+    lbl.Parent = bb
+
+    S.ESPObjects[target] = {hl = hl, bb = bb, lbl = lbl}
+end
+
+local function removeESP(target)
+    if S.ESPObjects[target] then
+        pcall(function() S.ESPObjects[target].hl:Destroy() end)
+        pcall(function() S.ESPObjects[target].bb:Destroy() end)
+        S.ESPObjects[target] = nil
+    end
+end
+
+local function cleanESP()
+    local snap = {}
+    for t in pairs(S.ESPObjects) do table.insert(snap, t) end
+    for _, t in ipairs(snap) do removeESP(t) end
+    S.ESPObjects = {}
+end
+
+task.spawn(function()
+    while getgenv().Nicotine do
+        task.wait(0.5)
+        -- cleanup dead
+        for t in pairs(S.ESPObjects) do
+            if not t or not t.Parent then removeESP(t) end
+        end
+        if S.ESP then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LP and p.Character then
+                    makeESP(p.Character, Color3.fromRGB(255, 100, 100))
+                    local e = S.ESPObjects[p.Character]
+                    if e and e.lbl then
+                        local r = getRoot()
+                        local tr = p.Character:FindFirstChild("HumanoidRootPart")
+                        if r and tr then
+                            e.lbl.Text = p.Name .. " | " .. math.floor((r.Position - tr.Position).Magnitude) .. "m"
+                        end
+                    end
+                end
+            end
+        else
+            for t in pairs(S.ESPObjects) do
+                if t:IsA("Model") then removeESP(t) end
+            end
+        end
+    end
+end)
+
+-- ============================================================
+-- UI
+-- ============================================================
 local Window = Rayfield:CreateWindow({
     Name = "Nicotine",
     LoadingTitle = "Nicotine",
@@ -156,14 +279,48 @@ local Window = Rayfield:CreateWindow({
 })
 
 local MainTab = Window:CreateTab("Main", 4483362458)
+
+MainTab:CreateSection("F3X")
+
 MainTab:CreateButton({
     Name = "Grab F3X & Return",
-    Callback = function()
-        grabAndReturn()
+    Callback = function() grabAndReturn() end
+})
+
+MainTab:CreateSection("Movement")
+
+MainTab:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Flag = "InfJump",
+    Callback = function(v)
+        S.InfJump = v
+        notify("Nicotine", "Infinite Jump " .. (v and "ON" or "OFF"), 2)
     end
 })
 
+MainTab:CreateSection("Visual")
+
+MainTab:CreateToggle({
+    Name = "Player ESP",
+    CurrentValue = false,
+    Flag = "ESPToggle",
+    Callback = function(v)
+        S.ESP = v
+        if not v then cleanESP() end
+        notify("Nicotine", "ESP " .. (v and "ON" or "OFF"), 2)
+    end
+})
+
+-- ============================================================
+-- CLEANUP
+-- ============================================================
 getgenv().Nicotine = function()
+    S.InfJump = false
+    S.ESP = false
+    cleanESP()
+    for _, c in ipairs(S.Conn) do pcall(function() c:Disconnect() end) end
+    S.Conn = {}
     pcall(function() Rayfield:Destroy() end)
     notify("Nicotine", "Unloaded.", 2)
 end
