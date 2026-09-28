@@ -8,6 +8,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local StarterGui = game:GetService("StarterGui")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
 local LP = Players.LocalPlayer
 local PG = LP:WaitForChild("PlayerGui", 15)
 if not PG then return end
@@ -59,7 +61,7 @@ local S = {
     ESP = false,
     Conn = {},
     ESPObjects = {},
-    CanInfJump = true  -- cooldown to prevent spam
+    CanInfJump = true
 }
 
 local function getChar() return LP.Character end
@@ -166,15 +168,43 @@ local function grabAndReturn()
 end
 
 -- ============================================================
+-- SERVER HOP
+-- ============================================================
+local function serverHop()
+    notify("Nicotine", "Finding new server...", 3)
+    local ok, err = pcall(function()
+        local req = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100&sortOrder=Asc")
+        local data = HttpService:JSONDecode(req)
+        if not data or not data.data then error("No server data") end
+        local servers = {}
+        for _, srv in ipairs(data.data) do
+            if srv.id ~= game.JobId and srv.playing < srv.maxPlayers and srv.playing > 0 then
+                table.insert(servers, srv)
+            end
+        end
+        if #servers == 0 then error("No available servers") end
+        local picked = servers[math.random(1, #servers)]
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, picked.id, LP)
+    end)
+    if not ok then
+        notify("Nicotine", "Hop failed: " .. tostring(err), 4)
+    end
+end
+
+local function rejoinServer()
+    notify("Nicotine", "Rejoining...", 2)
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
+    end)
+end
+
+-- ============================================================
 -- INFINITE JUMP
--- Only fires when airborne and only once per jump cycle.
--- Uses JumpRequest listener so it only triggers on real input.
 -- ============================================================
 trk(game:GetService("UserInputService").JumpRequest:Connect(function()
     if not S.InfJump then return end
     local h = getHum()
     if not h then return end
-    -- Only fire if we're in the air (falling/jumping) to avoid double-jumps on ground
     local state = h:GetState()
     if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping then
         if S.CanInfJump then
@@ -241,7 +271,6 @@ end
 task.spawn(function()
     while getgenv().Nicotine do
         task.wait(0.5)
-        -- cleanup dead
         for t in pairs(S.ESPObjects) do
             if not t or not t.Parent then removeESP(t) end
         end
@@ -310,6 +339,18 @@ MainTab:CreateToggle({
         if not v then cleanESP() end
         notify("Nicotine", "ESP " .. (v and "ON" or "OFF"), 2)
     end
+})
+
+MainTab:CreateSection("Server")
+
+MainTab:CreateButton({
+    Name = "Server Hop",
+    Callback = function() serverHop() end
+})
+
+MainTab:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function() rejoinServer() end
 })
 
 -- ============================================================
