@@ -77,7 +77,6 @@ local S = {
     ESP = saved.ESP or false,
     AntiKick = saved.AntiKick or false,
     AntiAFK = saved.AntiAFK or false,
-    AutoGrab = saved.AutoGrab or false,
     PlatformSize = saved.PlatformSize or 50,
     Device = saved.Device or nil,
     Conn = {}, ESPObjects = {}, PlacedParts = {},
@@ -88,8 +87,7 @@ local S = {
 local function saveCurrentState()
     saveConfig({
         InfJump = S.InfJump, ESP = S.ESP, AntiKick = S.AntiKick,
-        AntiAFK = S.AntiAFK, AutoGrab = S.AutoGrab,
-        PlatformSize = S.PlatformSize, Device = S.Device
+        AntiAFK = S.AntiAFK, PlatformSize = S.PlatformSize, Device = S.Device
     })
 end
 
@@ -101,6 +99,15 @@ local function trk(c) table.insert(S.Conn, c); return c end
 
 local buildPCUI
 local buildMobileUI
+
+-- SAFETY SWEEP: nuke any stray selectors that might linger
+local function nukeSelectors()
+    for _, v in ipairs(PG:GetChildren()) do
+        if v.Name == "NicotineSelector" then
+            pcall(function() v:Destroy() end)
+        end
+    end
+end
 
 local function applyAntiKick()
     pcall(function()
@@ -130,7 +137,7 @@ local function setupAntiAFK()
     end))
 end
 
-local TOOL_KW = {"building","f3x","btool","b tool","hammer","move","clone","destroy","import","wrench","lpi","resize","gear","tool"}
+local TOOL_KW = {"building","f3x","btool","b tool","hammer","move","clone","destroy","import","wrench","lpi","resize","gear"}
 local BT_KEYWORDS = {"btool", "b tool", "b-tool", "brick tool", "building tool", "b_tool"}
 
 local function isF3XTool(o)
@@ -591,7 +598,20 @@ trk(UIS.InputBegan:Connect(function(input, gameProcessed)
     end
 end))
 
+-- ============================================================
+-- DEVICE SELECTOR (fixed: instant destroy on click)
+-- ============================================================
 local function showDeviceSelector()
+    local BG     = Color3.fromRGB(22, 22, 26)
+    local HEAD   = Color3.fromRGB(26, 26, 30)
+    local BORDER = Color3.fromRGB(44, 44, 50)
+    local LINE   = Color3.fromRGB(40, 40, 46)
+    local ROW    = Color3.fromRGB(30, 30, 36)
+    local ROW_H  = Color3.fromRGB(38, 38, 46)
+    local TEXT   = Color3.fromRGB(235, 235, 240)
+    local SUB    = Color3.fromRGB(120, 120, 130)
+    local ACCENT = Color3.fromRGB(130, 95, 200)
+
     local sg = Instance.new("ScreenGui")
     sg.Name = "NicotineSelector"
     sg.ResetOnSpawn = false
@@ -599,67 +619,250 @@ local function showDeviceSelector()
     sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     sg.Parent = PG
 
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 320, 0, 190)
-    frame.Position = UDim2.new(0.5, -160, 0.5, -95)
-    frame.BackgroundColor3 = Color3.fromRGB(20, 15, 30)
-    frame.BorderSizePixel = 0
-    frame.Active = true
-    frame.Draggable = true
-    frame.Parent = sg
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
-    local stroke = Instance.new("UIStroke", frame)
-    stroke.Color = Color3.fromRGB(160, 100, 255)
-    stroke.Thickness = 2
+    local dim = Instance.new("Frame")
+    dim.Size = UDim2.new(1, 0, 1, 0)
+    dim.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    dim.BackgroundTransparency = 0.55
+    dim.BorderSizePixel = 0
+    dim.Parent = sg
 
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 50)
-    title.BackgroundTransparency = 1
-    title.Text = "Nicotine"
-    title.TextColor3 = Color3.fromRGB(230, 225, 245)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 22
-    title.Parent = frame
+    local win = Instance.new("Frame")
+    win.Size = UDim2.new(0, 400, 0, 230)
+    win.Position = UDim2.new(0.5, -200, 0.5, -115)
+    win.BackgroundColor3 = BG
+    win.BorderSizePixel = 0
+    win.Active = true
+    win.Draggable = true
+    win.Parent = sg
+    Instance.new("UICorner", win).CornerRadius = UDim.new(0, 8)
+    local ws = Instance.new("UIStroke", win)
+    ws.Color = BORDER
+    ws.Thickness = 1
 
-    local sub = Instance.new("TextLabel")
-    sub.Size = UDim2.new(1, 0, 0, 20)
-    sub.Position = UDim2.new(0, 0, 0, 45)
-    sub.BackgroundTransparency = 1
-    sub.Text = "Select your device"
-    sub.TextColor3 = Color3.fromRGB(140, 130, 170)
-    sub.Font = Enum.Font.Gotham
-    sub.TextSize = 13
-    sub.Parent = frame
+    local head = Instance.new("Frame")
+    head.Size = UDim2.new(1, 0, 0, 44)
+    head.BackgroundColor3 = HEAD
+    head.BorderSizePixel = 0
+    head.Parent = win
+    Instance.new("UICorner", head).CornerRadius = UDim.new(0, 8)
+    local headFix = Instance.new("Frame")
+    headFix.Size = UDim2.new(1, 0, 0, 10)
+    headFix.Position = UDim2.new(0, 0, 1, -10)
+    headFix.BackgroundColor3 = HEAD
+    headFix.BorderSizePixel = 0
+    headFix.Parent = head
+
+    local headLine = Instance.new("Frame")
+    headLine.Size = UDim2.new(1, 0, 0, 1)
+    headLine.Position = UDim2.new(0, 0, 1, -1)
+    headLine.BackgroundColor3 = LINE
+    headLine.BorderSizePixel = 0
+    headLine.Parent = head
+
+    local logo = Instance.new("Frame")
+    logo.Size = UDim2.new(0, 18, 0, 18)
+    logo.Position = UDim2.new(0, 14, 0.5, -9)
+    logo.BackgroundColor3 = ACCENT
+    logo.BorderSizePixel = 0
+    logo.Parent = head
+    Instance.new("UICorner", logo).CornerRadius = UDim.new(0, 4)
+
+    local brand = Instance.new("TextLabel")
+    brand.Size = UDim2.new(0, 200, 1, 0)
+    brand.Position = UDim2.new(0, 38, 0, 0)
+    brand.BackgroundTransparency = 1
+    brand.Text = "Nicotine"
+    brand.TextColor3 = TEXT
+    brand.Font = Enum.Font.GothamBold
+    brand.TextSize = 14
+    brand.TextXAlignment = Enum.TextXAlignment.Left
+    brand.Parent = head
+
+    local ver = Instance.new("TextLabel")
+    ver.Size = UDim2.new(0, 60, 1, 0)
+    ver.Position = UDim2.new(1, -74, 0, 0)
+    ver.BackgroundTransparency = 1
+    ver.Text = "v4.1"
+    ver.TextColor3 = SUB
+    ver.Font = Enum.Font.Gotham
+    ver.TextSize = 11
+    ver.TextXAlignment = Enum.TextXAlignment.Right
+    ver.Parent = head
+
+    local secLbl = Instance.new("TextLabel")
+    secLbl.Size = UDim2.new(1, -32, 0, 14)
+    secLbl.Position = UDim2.new(0, 16, 0, 58)
+    secLbl.BackgroundTransparency = 1
+    secLbl.Text = "SELECT DEVICE"
+    secLbl.TextColor3 = SUB
+    secLbl.Font = Enum.Font.GothamBold
+    secLbl.TextSize = 10
+    secLbl.TextXAlignment = Enum.TextXAlignment.Left
+    secLbl.Parent = win
 
     local choice = nil
+    local destroyed = false
 
-    local function mkBtn(txt, xPos, val)
-        local b = Instance.new("TextButton")
-        b.Size = UDim2.new(0.4, 0, 0, 46)
-        b.Position = UDim2.new(xPos, 0, 0, 105)
-        b.BackgroundColor3 = Color3.fromRGB(60, 40, 100)
-        b.Text = txt
-        b.TextColor3 = Color3.fromRGB(255, 255, 255)
-        b.Font = Enum.Font.GothamBold
-        b.TextSize = 16
-        b.BorderSizePixel = 0
-        b.Parent = frame
-        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
-        b.MouseButton1Click:Connect(function()
-            choice = val
-            S.Device = val
-            saveCurrentState()
-            sg:Destroy()
+    -- FIXED: immediate, non-yielding destroy
+    local function pick(val)
+        if destroyed then return end
+        destroyed = true
+        choice = val
+        S.Device = val
+        saveCurrentState()
+        pcall(function() sg.Enabled = false end)
+        pcall(function() sg.Parent = nil end)
+        pcall(function() sg:Destroy() end)
+    end
+
+    local function makeRow(y, title, subtitle, val)
+        local row = Instance.new("TextButton")
+        row.Size = UDim2.new(1, -32, 0, 48)
+        row.Position = UDim2.new(0, 16, 0, y)
+        row.BackgroundColor3 = ROW
+        row.BorderSizePixel = 0
+        row.Text = ""
+        row.AutoButtonColor = false
+        row.Parent = win
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+
+        local radio = Instance.new("Frame")
+        radio.Size = UDim2.new(0, 16, 0, 16)
+        radio.Position = UDim2.new(0, 14, 0.5, -8)
+        radio.BackgroundTransparency = 1
+        radio.BorderSizePixel = 0
+        radio.Parent = row
+        Instance.new("UICorner", radio).CornerRadius = UDim.new(1, 0)
+        local rs = Instance.new("UIStroke", radio)
+        rs.Color = SUB
+        rs.Thickness = 1.5
+
+        local dot = Instance.new("Frame")
+        dot.Size = UDim2.new(0, 8, 0, 8)
+        dot.Position = UDim2.new(0.5, -4, 0.5, -4)
+        dot.BackgroundColor3 = ACCENT
+        dot.BorderSizePixel = 0
+        dot.Visible = false
+        dot.Parent = radio
+        Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, -60, 0, 16)
+        lbl.Position = UDim2.new(0, 42, 0, 8)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = title
+        lbl.TextColor3 = TEXT
+        lbl.Font = Enum.Font.GothamSemibold
+        lbl.TextSize = 13
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.Parent = row
+
+        local subl = Instance.new("TextLabel")
+        subl.Size = UDim2.new(1, -60, 0, 14)
+        subl.Position = UDim2.new(0, 42, 0, 25)
+        subl.BackgroundTransparency = 1
+        subl.Text = subtitle
+        subl.TextColor3 = SUB
+        subl.Font = Enum.Font.Gotham
+        subl.TextSize = 11
+        subl.TextXAlignment = Enum.TextXAlignment.Left
+        subl.Parent = row
+
+        row.MouseEnter:Connect(function()
+            if not destroyed then row.BackgroundColor3 = ROW_H end
+        end)
+        row.MouseLeave:Connect(function()
+            if not destroyed then row.BackgroundColor3 = ROW end
+        end)
+        row.MouseButton1Click:Connect(function()
+            dot.Visible = true
+            rs.Color = ACCENT
+            pick(val)
         end)
     end
 
-    mkBtn("PC",     0.06, "pc")
-    mkBtn("Mobile", 0.54, "mobile")
+    makeRow(80, "PC", "Keyboard & mouse", "pc")
+    makeRow(134, "Mobile", "Phone & tablet", "mobile")
 
-    while choice == nil and sg.Parent do task.wait(0.1) end
+    local foot = Instance.new("TextLabel")
+    foot.Size = UDim2.new(1, -32, 0, 14)
+    foot.Position = UDim2.new(0, 16, 1, -24)
+    foot.BackgroundTransparency = 1
+    foot.Text = "You can change this later in Settings"
+    foot.TextColor3 = SUB
+    foot.Font = Enum.Font.Gotham
+    foot.TextSize = 10
+    foot.TextXAlignment = Enum.TextXAlignment.Left
+    foot.Parent = win
+
+    while not destroyed do task.wait(0.05) end
     return choice or "pc"
 end
 
+-- ============================================================
+-- RESIZE HANDLE
+-- ============================================================
+local function addResizeHandle(parent, minW, minH, maxW, maxH)
+    local grip = Instance.new("TextButton")
+    grip.Size = UDim2.new(0, 18, 0, 18)
+    grip.Position = UDim2.new(1, -20, 1, -20)
+    grip.BackgroundTransparency = 1
+    grip.Text = ""
+    grip.AutoButtonColor = false
+    grip.ZIndex = 20
+    grip.Parent = parent
+
+    local l1 = Instance.new("Frame")
+    l1.Size = UDim2.new(0, 10, 0, 2)
+    l1.Position = UDim2.new(1, -13, 1, -7)
+    l1.BackgroundColor3 = Color3.fromRGB(120, 110, 150)
+    l1.BorderSizePixel = 0
+    l1.ZIndex = 20
+    l1.Parent = parent
+
+    local l2 = Instance.new("Frame")
+    l2.Size = UDim2.new(0, 2, 0, 10)
+    l2.Position = UDim2.new(1, -7, 1, -13)
+    l2.BackgroundColor3 = Color3.fromRGB(120, 110, 150)
+    l2.BorderSizePixel = 0
+    l2.ZIndex = 20
+    l2.Parent = parent
+
+    local dragging = false
+    local sx, sy, sw, sh
+
+    grip.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            sx, sy = i.Position.X, i.Position.Y
+            sw, sh = parent.AbsoluteSize.X, parent.AbsoluteSize.Y
+            parent.Draggable = false
+            l1.BackgroundColor3 = Color3.fromRGB(200, 180, 255)
+            l2.BackgroundColor3 = Color3.fromRGB(200, 180, 255)
+        end
+    end)
+    UIS.InputChanged:Connect(function(i)
+        if not dragging then return end
+        if i.UserInputType ~= Enum.UserInputType.MouseMovement and i.UserInputType ~= Enum.UserInputType.Touch then return end
+        local nw = math.clamp(sw + (i.Position.X - sx), minW, maxW)
+        local nh = math.clamp(sh + (i.Position.Y - sy), minH, maxH)
+        parent.Size = UDim2.new(0, nw, 0, nh)
+    end)
+    UIS.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            if dragging then
+                dragging = false
+                parent.Draggable = true
+                l1.BackgroundColor3 = Color3.fromRGB(120, 110, 150)
+                l2.BackgroundColor3 = Color3.fromRGB(120, 110, 150)
+            end
+        end
+    end)
+end
+
+-- ============================================================
+-- MOBILE UI
+-- ============================================================
 buildMobileUI = function()
     local Rayfield
     local srcs = {
@@ -751,6 +954,7 @@ buildMobileUI = function()
         pcall(function() RayfieldInstance:Destroy() end)
         task.spawn(function()
             local c = showDeviceSelector()
+            nukeSelectors()
             if c == "mobile" then buildMobileUI()
             elseif c == "pc" then buildPCUI() end
         end)
@@ -759,480 +963,345 @@ buildMobileUI = function()
     return Rayfield
 end
 
+-- ============================================================
+-- PC UI
+-- ============================================================
 buildPCUI = function()
-    local BG_DARK = Color3.fromRGB(14, 12, 20)
-    local BG_MID = Color3.fromRGB(22, 18, 32)
-    local BG_PANEL = Color3.fromRGB(28, 22, 44)
-    local BG_HOVER = Color3.fromRGB(42, 32, 66)
-    local ACCENT = Color3.fromRGB(160, 100, 255)
-    local ACCENT2 = Color3.fromRGB(220, 100, 200)
-    local TEXT = Color3.fromRGB(230, 225, 245)
-    local TEXT_DIM = Color3.fromRGB(140, 130, 170)
+    local BG     = Color3.fromRGB(18, 18, 22)
+    local PANEL  = Color3.fromRGB(26, 26, 32)
+    local CARD   = Color3.fromRGB(34, 34, 42)
+    local HOVER  = Color3.fromRGB(44, 44, 54)
+    local ACCENT = Color3.fromRGB(140, 90, 230)
+    local TEXT   = Color3.fromRGB(235, 235, 240)
+    local SUB    = Color3.fromRGB(140, 140, 155)
+    local LINE   = Color3.fromRGB(48, 48, 58)
 
     local sg = Instance.new("ScreenGui")
     sg.Name = "Nicotine"; sg.ResetOnSpawn = false; sg.IgnoreGuiInset = true
     sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; sg.Parent = PG
 
-    local glow = Instance.new("Frame")
-    glow.Size = UDim2.new(0, 680, 0, 500)
-    glow.Position = UDim2.new(0.5, -340, 0.5, -250)
-    glow.BackgroundColor3 = ACCENT
-    glow.BackgroundTransparency = 0.9
-    glow.BorderSizePixel = 0; glow.ZIndex = 0; glow.Parent = sg
-    Instance.new("UICorner", glow).CornerRadius = UDim.new(0, 24)
-
     local win = Instance.new("Frame")
-    win.Size = UDim2.new(0, 660, 0, 480)
-    win.Position = UDim2.new(0.5, -330, 0.5, -240)
-    win.BackgroundColor3 = BG_DARK; win.BorderSizePixel = 0
-    win.Active = true; win.Draggable = true
-    win.ZIndex = 1; win.Parent = sg
-    Instance.new("UICorner", win).CornerRadius = UDim.new(0, 14)
-    local winStroke = Instance.new("UIStroke", win)
-    winStroke.Color = ACCENT; winStroke.Thickness = 1.5
-    winStroke.Transparency = 0.4
-
-    local winGrad = Instance.new("UIGradient", win)
-    winGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, BG_MID),
-        ColorSequenceKeypoint.new(0.5, BG_DARK),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 12, 26))
-    })
-    winGrad.Rotation = 135
+    win.Size = UDim2.new(0, 620, 0, 440)
+    win.Position = UDim2.new(0.5, -310, 0.5, -220)
+    win.BackgroundColor3 = BG; win.BorderSizePixel = 0
+    win.Active = true; win.Draggable = true; win.Parent = sg
+    Instance.new("UICorner", win).CornerRadius = UDim.new(0, 10)
+    local ws = Instance.new("UIStroke", win)
+    ws.Color = LINE; ws.Thickness = 1
 
     local tb = Instance.new("Frame")
-    tb.Size = UDim2.new(1, 0, 0, 44); tb.BackgroundColor3 = BG_MID
-    tb.BorderSizePixel = 0; tb.ZIndex = 2; tb.Parent = win
-    Instance.new("UICorner", tb).CornerRadius = UDim.new(0, 14)
+    tb.Size = UDim2.new(1, 0, 0, 40); tb.BackgroundColor3 = PANEL
+    tb.BorderSizePixel = 0; tb.Parent = win
+    Instance.new("UICorner", tb).CornerRadius = UDim.new(0, 10)
+    local tbf = Instance.new("Frame")
+    tbf.Size = UDim2.new(1, 0, 0, 12); tbf.Position = UDim2.new(0, 0, 1, -12)
+    tbf.BackgroundColor3 = PANEL; tbf.BorderSizePixel = 0; tbf.Parent = tb
 
-    local tbFix = Instance.new("Frame")
-    tbFix.Size = UDim2.new(1, 0, 0, 14)
-    tbFix.Position = UDim2.new(0, 0, 1, -14)
-    tbFix.BackgroundColor3 = BG_MID; tbFix.BorderSizePixel = 0; tbFix.ZIndex = 2; tbFix.Parent = tb
-
-    local tbGrad = Instance.new("UIGradient", tb)
-    tbGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 30, 90)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(40, 22, 60)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 30, 90))
-    })
-    tbGrad.Rotation = 0
-
-    task.spawn(function()
-        local t = 0
-        while win.Parent do
-            t = t + 0.01
-            tbGrad.Rotation = (math.sin(t) * 30) + 30
-            task.wait(0.05)
-        end
-    end)
-
-    local logo = Instance.new("Frame")
-    logo.Size = UDim2.new(0, 26, 0, 26); logo.Position = UDim2.new(0, 14, 0, 9)
-    logo.BackgroundColor3 = ACCENT; logo.BorderSizePixel = 0; logo.ZIndex = 3
-    logo.Parent = tb
-    Instance.new("UICorner", logo).CornerRadius = UDim.new(0, 8)
-    local logoTxt = Instance.new("TextLabel")
-    logoTxt.Size = UDim2.new(1, 0, 1, 0); logoTxt.BackgroundTransparency = 1
-    logoTxt.Text = "N"; logoTxt.TextColor3 = Color3.fromRGB(255,255,255)
-    logoTxt.Font = Enum.Font.GothamBlack; logoTxt.TextSize = 14
-    logoTxt.ZIndex = 4; logoTxt.Parent = logo
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(0, 250, 1, 0); title.Position = UDim2.new(0, 48, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "Nicotine"; title.TextColor3 = TEXT
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Font = Enum.Font.GothamBold; title.TextSize = 16
-    title.ZIndex = 3; title.Parent = tb
-
-    local version = Instance.new("TextLabel")
-    version.Size = UDim2.new(0, 100, 1, 0); version.Position = UDim2.new(0, 130, 0, 0)
-    version.BackgroundTransparency = 1
-    version.Text = "v3.0  •  PC"; version.TextColor3 = TEXT_DIM
-    version.TextXAlignment = Enum.TextXAlignment.Left
-    version.Font = Enum.Font.Gotham; version.TextSize = 11
-    version.ZIndex = 3; version.Parent = tb
-
-    local statusDot = Instance.new("Frame")
-    statusDot.Size = UDim2.new(0, 10, 0, 10)
-    statusDot.Position = UDim2.new(1, -110, 0.5, -5)
-    statusDot.BackgroundColor3 = Color3.fromRGB(80, 220, 120)
-    statusDot.BorderSizePixel = 0; statusDot.ZIndex = 3; statusDot.Parent = tb
-    Instance.new("UICorner", statusDot).CornerRadius = UDim.new(1, 0)
-
-    local statusLbl = Instance.new("TextLabel")
-    statusLbl.Size = UDim2.new(0, 70, 1, 0); statusLbl.Position = UDim2.new(1, -95, 0, 0)
-    statusLbl.BackgroundTransparency = 1; statusLbl.Text = "Active"
-    statusLbl.TextColor3 = Color3.fromRGB(80, 220, 120)
-    statusLbl.TextXAlignment = Enum.TextXAlignment.Left
-    statusLbl.Font = Enum.Font.GothamSemibold; statusLbl.TextSize = 11
-    statusLbl.ZIndex = 3; statusLbl.Parent = tb
-
-    task.spawn(function()
-        while statusDot.Parent do
-            TweenService:Create(statusDot, TweenInfo.new(0.6), {BackgroundTransparency = 0.5}):Play()
-            task.wait(0.6)
-            TweenService:Create(statusDot, TweenInfo.new(0.6), {BackgroundTransparency = 0}):Play()
-            task.wait(0.6)
-        end
-    end)
-
-    local mini = Instance.new("TextButton")
-    mini.Size = UDim2.new(0, 24, 0, 24); mini.Position = UDim2.new(1, -64, 0, 10)
-    mini.BackgroundColor3 = Color3.fromRGB(90, 70, 130); mini.Text = "–"
-    mini.TextColor3 = TEXT; mini.Font = Enum.Font.GothamBold; mini.TextSize = 16
-    mini.BorderSizePixel = 0; mini.ZIndex = 3; mini.Parent = tb
-    Instance.new("UICorner", mini).CornerRadius = UDim.new(0, 6)
+    local t = Instance.new("TextLabel")
+    t.Size = UDim2.new(0, 200, 1, 0); t.Position = UDim2.new(0, 16, 0, 0)
+    t.BackgroundTransparency = 1; t.Text = "Nicotine"
+    t.TextColor3 = TEXT; t.Font = Enum.Font.GothamBold; t.TextSize = 14
+    t.TextXAlignment = Enum.TextXAlignment.Left; t.Parent = tb
 
     local close = Instance.new("TextButton")
-    close.Size = UDim2.new(0, 24, 0, 24); close.Position = UDim2.new(1, -34, 0, 10)
-    close.BackgroundColor3 = Color3.fromRGB(200, 60, 90); close.Text = "✕"
-    close.TextColor3 = Color3.fromRGB(255,255,255); close.Font = Enum.Font.GothamBold
-    close.TextSize = 12; close.BorderSizePixel = 0; close.ZIndex = 3; close.Parent = tb
+    close.Size = UDim2.new(0, 28, 0, 28); close.Position = UDim2.new(1, -38, 0, 6)
+    close.BackgroundColor3 = Color3.fromRGB(180, 60, 80); close.Text = "✕"
+    close.TextColor3 = TEXT; close.Font = Enum.Font.GothamBold
+    close.TextSize = 12; close.BorderSizePixel = 0; close.AutoButtonColor = false
+    close.Parent = tb
     Instance.new("UICorner", close).CornerRadius = UDim.new(0, 6)
 
-    local sidebar = Instance.new("Frame")
-    sidebar.Size = UDim2.new(0, 140, 1, -60); sidebar.Position = UDim2.new(0, 12, 0, 52)
-    sidebar.BackgroundColor3 = BG_PANEL; sidebar.BorderSizePixel = 0
-    sidebar.ZIndex = 2; sidebar.Parent = win
-    Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 10)
-    local sGrad = Instance.new("UIGradient", sidebar)
-    sGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 24, 52)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 16, 32))
-    })
-    sGrad.Rotation = 90
-    local sl = Instance.new("UIListLayout", sidebar)
-    sl.Padding = UDim.new(0, 5); sl.SortOrder = Enum.SortOrder.LayoutOrder
-    local sp = Instance.new("UIPadding", sidebar)
-    sp.PaddingTop = UDim.new(0, 8); sp.PaddingLeft = UDim.new(0, 8)
-    sp.PaddingRight = UDim.new(0, 8)
+    local mini = Instance.new("TextButton")
+    mini.Size = UDim2.new(0, 28, 0, 28); mini.Position = UDim2.new(1, -72, 0, 6)
+    mini.BackgroundColor3 = Color3.fromRGB(60, 60, 72); mini.Text = "–"
+    mini.TextColor3 = TEXT; mini.Font = Enum.Font.GothamBold
+    mini.TextSize = 14; mini.BorderSizePixel = 0; mini.AutoButtonColor = false
+    mini.Parent = tb
+    Instance.new("UICorner", mini).CornerRadius = UDim.new(0, 6)
+    mini.MouseButton1Click:Connect(function() win.Visible = false end)
 
-    local indicator = Instance.new("Frame")
-    indicator.Size = UDim2.new(0, 3, 0, 0); indicator.BackgroundColor3 = ACCENT
-    indicator.BorderSizePixel = 0; indicator.ZIndex = 5; indicator.Parent = sidebar
-    Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
+    local side = Instance.new("Frame")
+    side.Size = UDim2.new(0, 130, 1, -56); side.Position = UDim2.new(0, 8, 0, 48)
+    side.BackgroundColor3 = PANEL; side.BorderSizePixel = 0; side.Parent = win
+    Instance.new("UICorner", side).CornerRadius = UDim.new(0, 8)
+    local sl = Instance.new("UIListLayout", side)
+    sl.Padding = UDim.new(0, 3); sl.SortOrder = Enum.SortOrder.LayoutOrder
+    local sp = Instance.new("UIPadding", side)
+    sp.PaddingTop = UDim.new(0, 6); sp.PaddingLeft = UDim.new(0, 6)
+    sp.PaddingRight = UDim.new(0, 6); sp.PaddingBottom = UDim.new(0, 6)
 
     local content = Instance.new("ScrollingFrame")
-    content.Size = UDim2.new(1, -172, 1, -70); content.Position = UDim2.new(0, 164, 0, 52)
+    content.Size = UDim2.new(1, -154, 1, -64); content.Position = UDim2.new(0, 146, 0, 48)
     content.BackgroundTransparency = 1; content.BorderSizePixel = 0
     content.CanvasSize = UDim2.new(0, 0, 0, 0)
-    content.ScrollBarThickness = 4
+    content.ScrollBarThickness = 3
     content.ScrollBarImageColor3 = ACCENT
-    content.ZIndex = 2; content.Parent = win
+    content.Parent = win
     local cl = Instance.new("UIListLayout", content)
-    cl.Padding = UDim.new(0, 6); cl.SortOrder = Enum.SortOrder.LayoutOrder
+    cl.Padding = UDim.new(0, 4); cl.SortOrder = Enum.SortOrder.LayoutOrder
     local cp = Instance.new("UIPadding", content)
-    cp.PaddingTop = UDim.new(0, 4); cp.PaddingBottom = UDim.new(0, 12)
-    cp.PaddingLeft = UDim.new(0, 4); cp.PaddingRight = UDim.new(0, 4)
+    cp.PaddingTop = UDim.new(0, 2); cp.PaddingBottom = UDim.new(0, 10)
 
     local pages, tabs = {}, {}
-    local currentTabBtn = nil
+    local currentTab = nil
 
-    local function showPage(name)
-        for n, f in pairs(pages) do f.Visible = (n == name) end
-        for n, btn in pairs(tabs) do
-            local isActive = (n == name)
-            TweenService:Create(btn, TweenInfo.new(0.2), {
-                BackgroundColor3 = isActive and BG_HOVER or Color3.fromRGB(36, 28, 56)
-            }):Play()
-            btn.TextColor3 = isActive and ACCENT or TEXT
-        end
-        local activeBtn = tabs[name]
-        if activeBtn then
-            TweenService:Create(indicator, TweenInfo.new(0.25, Enum.EasingStyle.Quart), {
-                Position = UDim2.new(0, 2, 0, activeBtn.AbsolutePosition.Y - sidebar.AbsolutePosition.Y),
-                Size = UDim2.new(0, 3, 0, activeBtn.AbsoluteSize.Y - 4)
-            }):Play()
+    local function show(name)
+        for n, p in pairs(pages) do p.Visible = (n == name) end
+        for n, b in pairs(tabs) do
+            b.BackgroundColor3 = (n == name) and HOVER or PANEL
+            b.TextColor3 = (n == name) and TEXT or SUB
         end
     end
 
-    local function createTab(name)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 36)
-        btn.BackgroundColor3 = Color3.fromRGB(36, 28, 56)
-        btn.BorderSizePixel = 0; btn.Text = "  " .. name
-        btn.TextColor3 = TEXT; btn.TextXAlignment = Enum.TextXAlignment.Left
-        btn.Font = Enum.Font.GothamSemibold; btn.TextSize = 13
-        btn.AutoButtonColor = false; btn.ZIndex = 3; btn.Parent = sidebar
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
-        tabs[name] = btn
+    local function tab(name)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(1, 0, 0, 30)
+        b.BackgroundColor3 = PANEL; b.BorderSizePixel = 0
+        b.Text = "  " .. name; b.TextColor3 = SUB
+        b.TextXAlignment = Enum.TextXAlignment.Left
+        b.Font = Enum.Font.GothamSemibold; b.TextSize = 12
+        b.AutoButtonColor = false; b.Parent = side
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+        tabs[name] = b
 
-        btn.MouseEnter:Connect(function()
-            if currentTabBtn ~= name then
-                TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(46, 36, 68)}):Play()
+        b.MouseEnter:Connect(function()
+            if currentTab ~= name then b.BackgroundColor3 = Color3.fromRGB(38, 38, 46) end
+        end)
+        b.MouseLeave:Connect(function()
+            if currentTab ~= name then b.BackgroundColor3 = PANEL end
+        end)
+        b.MouseButton1Click:Connect(function()
+            currentTab = name; show(name)
+        end)
+
+        local p = Instance.new("Frame")
+        p.Size = UDim2.new(1, 0, 0, 0); p.BackgroundTransparency = 1
+        p.Visible = false; p.Parent = content
+        local pl = Instance.new("UIListLayout", p)
+        pl.Padding = UDim.new(0, 4); pl.SortOrder = Enum.SortOrder.LayoutOrder
+        p.AutomaticSize = Enum.AutomaticSize.Y
+        pages[name] = p
+        return p
+    end
+
+    local function label(parent, text)
+        local l = Instance.new("TextLabel")
+        l.Size = UDim2.new(1, 0, 0, 18); l.BackgroundTransparency = 1
+        l.Text = text; l.TextColor3 = SUB
+        l.Font = Enum.Font.GothamBold; l.TextSize = 10
+        l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = parent
+    end
+
+    local function btn(parent, text, cb)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(1, 0, 0, 30); b.BackgroundColor3 = CARD
+        b.BorderSizePixel = 0; b.Text = "  " .. text; b.TextColor3 = TEXT
+        b.TextXAlignment = Enum.TextXAlignment.Left
+        b.Font = Enum.Font.GothamSemibold; b.TextSize = 12
+        b.AutoButtonColor = false; b.Parent = parent
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+
+        b.MouseEnter:Connect(function() b.BackgroundColor3 = HOVER end)
+        b.MouseLeave:Connect(function() b.BackgroundColor3 = CARD end)
+        b.MouseButton1Click:Connect(function()
+            b.BackgroundColor3 = ACCENT
+            task.delay(0.12, function() b.BackgroundColor3 = CARD end)
+            pcall(cb)
+        end)
+    end
+
+    local function toggle(parent, text, state, cb)
+        local f = Instance.new("Frame")
+        f.Size = UDim2.new(1, 0, 0, 30); f.BackgroundColor3 = CARD
+        f.BorderSizePixel = 0; f.Parent = parent
+        Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
+
+        local l = Instance.new("TextLabel")
+        l.Size = UDim2.new(1, -60, 1, 0); l.Position = UDim2.new(0, 12, 0, 0)
+        l.BackgroundTransparency = 1; l.Text = text; l.TextColor3 = TEXT
+        l.Font = Enum.Font.GothamSemibold; l.TextSize = 12
+        l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = f
+
+        local tr = Instance.new("Frame")
+        tr.Size = UDim2.new(0, 36, 0, 18); tr.Position = UDim2.new(1, -46, 0.5, -9)
+        tr.BackgroundColor3 = state and ACCENT or Color3.fromRGB(60, 60, 72)
+        tr.BorderSizePixel = 0; tr.Parent = f
+        Instance.new("UICorner", tr).CornerRadius = UDim.new(1, 0)
+
+        local k = Instance.new("Frame")
+        k.Size = UDim2.new(0, 14, 0, 14)
+        k.Position = state and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+        k.BackgroundColor3 = Color3.fromRGB(240, 240, 245)
+        k.BorderSizePixel = 0; k.Parent = tr
+        Instance.new("UICorner", k).CornerRadius = UDim.new(1, 0)
+
+        local s = state
+        f.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                s = not s
+                tr.BackgroundColor3 = s and ACCENT or Color3.fromRGB(60, 60, 72)
+                k.Position = s and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+                pcall(function() cb(s) end)
             end
         end)
-        btn.MouseLeave:Connect(function()
-            if currentTabBtn ~= name then
-                TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(36, 28, 56)}):Play()
-            end
-        end)
-
-        local page = Instance.new("Frame")
-        page.Size = UDim2.new(1, 0, 0, 0); page.BackgroundTransparency = 1
-        page.Visible = false; page.Parent = content
-        local pl = Instance.new("UIListLayout", page)
-        pl.Padding = UDim.new(0, 6); pl.SortOrder = Enum.SortOrder.LayoutOrder
-        page.AutomaticSize = Enum.AutomaticSize.Y
-        pages[name] = page
-
-        btn.MouseButton1Click:Connect(function()
-            currentTabBtn = name
-            showPage(name)
-        end)
-        return page
     end
 
-    local function makeSection(parent, text)
-        local wrap = Instance.new("Frame")
-        wrap.Size = UDim2.new(1, 0, 0, 22); wrap.BackgroundTransparency = 1; wrap.Parent = parent
-        local s = Instance.new("TextLabel")
-        s.Size = UDim2.new(1, 0, 1, 0); s.BackgroundTransparency = 1
-        s.Text = "▎ " .. text; s.TextColor3 = ACCENT
-        s.TextXAlignment = Enum.TextXAlignment.Left
-        s.Font = Enum.Font.GothamBold; s.TextSize = 12; s.Parent = wrap
-    end
+    local function slider(parent, text, minV, maxV, initial, cb)
+        local f = Instance.new("Frame")
+        f.Size = UDim2.new(1, 0, 0, 50); f.BackgroundColor3 = CARD
+        f.BorderSizePixel = 0; f.Parent = parent
+        Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
 
-    local function makeButton(parent, text, callback)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 34)
-        btn.BackgroundColor3 = Color3.fromRGB(36, 28, 56)
-        btn.BorderSizePixel = 0; btn.Text = "  " .. text
-        btn.TextColor3 = TEXT; btn.TextXAlignment = Enum.TextXAlignment.Left
-        btn.Font = Enum.Font.GothamSemibold; btn.TextSize = 13
-        btn.AutoButtonColor = false; btn.Parent = parent
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
-        local stroke = Instance.new("UIStroke", btn)
-        stroke.Color = ACCENT; stroke.Thickness = 0; stroke.Transparency = 0.7
+        local l = Instance.new("TextLabel")
+        l.Size = UDim2.new(1, -100, 0, 18); l.Position = UDim2.new(0, 12, 0, 6)
+        l.BackgroundTransparency = 1; l.Text = text; l.TextColor3 = TEXT
+        l.Font = Enum.Font.GothamSemibold; l.TextSize = 12
+        l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = f
 
-        btn.MouseEnter:Connect(function()
-            TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = BG_HOVER}):Play()
-            TweenService:Create(stroke, TweenInfo.new(0.15), {Thickness = 1}):Play()
-        end)
-        btn.MouseLeave:Connect(function()
-            TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(36, 28, 56)}):Play()
-            TweenService:Create(stroke, TweenInfo.new(0.15), {Thickness = 0}):Play()
-        end)
-        btn.MouseButton1Click:Connect(function()
-            TweenService:Create(btn, TweenInfo.new(0.08), {BackgroundColor3 = ACCENT}):Play()
-            task.delay(0.15, function()
-                TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(36, 28, 56)}):Play()
-            end)
-            pcall(callback)
-        end)
-    end
+        local v = Instance.new("TextLabel")
+        v.Size = UDim2.new(0, 70, 0, 18); v.Position = UDim2.new(1, -82, 0, 6)
+        v.BackgroundTransparency = 1; v.Text = tostring(initial)
+        v.TextColor3 = ACCENT; v.Font = Enum.Font.GothamBold; v.TextSize = 12
+        v.TextXAlignment = Enum.TextXAlignment.Right; v.Parent = f
 
-    local function makeToggle(parent, text, initialState, callback)
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, 0, 0, 36)
-        frame.BackgroundColor3 = Color3.fromRGB(36, 28, 56)
-        frame.BorderSizePixel = 0; frame.Parent = parent
-        Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 7)
-
-        local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, -70, 1, 0); lbl.Position = UDim2.new(0, 14, 0, 0)
-        lbl.BackgroundTransparency = 1; lbl.Text = text
-        lbl.TextColor3 = TEXT; lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.Font = Enum.Font.GothamSemibold; lbl.TextSize = 13; lbl.Parent = frame
-
-        local track = Instance.new("Frame")
-        track.Size = UDim2.new(0, 44, 0, 22)
-        track.Position = UDim2.new(1, -54, 0.5, -11)
-        track.BackgroundColor3 = initialState and ACCENT or Color3.fromRGB(70, 60, 90)
-        track.BorderSizePixel = 0; track.Parent = frame
-        Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
-
-        local knob = Instance.new("Frame")
-        knob.Size = UDim2.new(0, 18, 0, 18)
-        knob.Position = initialState and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
-        knob.BackgroundColor3 = Color3.fromRGB(240, 240, 245)
-        knob.BorderSizePixel = 0; knob.Parent = track
-        Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-
-        local state = initialState
-        local function toggle()
-            state = not state
-            TweenService:Create(track, TweenInfo.new(0.2), {
-                BackgroundColor3 = state and ACCENT or Color3.fromRGB(70, 60, 90)
-            }):Play()
-            TweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quart), {
-                Position = state and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
-            }):Play()
-            pcall(function() callback(state) end)
-        end
-        track.InputBegan:Connect(function(i)
-            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then toggle() end
-        end)
-        lbl.InputBegan:Connect(function(i)
-            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then toggle() end
-        end)
-    end
-
-    local function makeSlider(parent, text, minVal, maxVal, initial, callback)
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, 0, 0, 56)
-        frame.BackgroundColor3 = Color3.fromRGB(36, 28, 56)
-        frame.BorderSizePixel = 0; frame.Parent = parent
-        Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 7)
-
-        local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, -20, 0, 22); lbl.Position = UDim2.new(0, 14, 0, 4)
-        lbl.BackgroundTransparency = 1; lbl.Text = text .. "  •  " .. initial
-        lbl.TextColor3 = TEXT; lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.Font = Enum.Font.GothamSemibold; lbl.TextSize = 12; lbl.Parent = frame
-
-        local track = Instance.new("Frame")
-        track.Size = UDim2.new(1, -28, 0, 8); track.Position = UDim2.new(0, 14, 0, 34)
-        track.BackgroundColor3 = Color3.fromRGB(58, 48, 82); track.BorderSizePixel = 0
-        track.Parent = frame
-        Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+        local tr = Instance.new("Frame")
+        tr.Size = UDim2.new(1, -24, 0, 6); tr.Position = UDim2.new(0, 12, 0, 32)
+        tr.BackgroundColor3 = Color3.fromRGB(52, 52, 62); tr.BorderSizePixel = 0
+        tr.Parent = f
+        Instance.new("UICorner", tr).CornerRadius = UDim.new(1, 0)
 
         local fill = Instance.new("Frame")
-        fill.Size = UDim2.new((initial - minVal) / (maxVal - minVal), 0, 1, 0)
-        fill.BackgroundColor3 = ACCENT; fill.BorderSizePixel = 0; fill.Parent = track
+        fill.Size = UDim2.new((initial - minV) / (maxV - minV), 0, 1, 0)
+        fill.BackgroundColor3 = ACCENT; fill.BorderSizePixel = 0; fill.Parent = tr
         Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-        local fillGrad = Instance.new("UIGradient", fill)
-        fillGrad.Color = ColorSequence.new(ACCENT, ACCENT2)
 
-        local knob = Instance.new("Frame")
-        knob.Size = UDim2.new(0, 16, 0, 16)
-        knob.Position = UDim2.new((initial - minVal) / (maxVal - minVal), -8, 0.5, -8)
-        knob.BackgroundColor3 = Color3.fromRGB(255,255,255); knob.BorderSizePixel = 0; knob.Parent = track
-        Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-        local knobStroke = Instance.new("UIStroke", knob)
-        knobStroke.Color = ACCENT; knobStroke.Thickness = 2
+        local k = Instance.new("Frame")
+        k.Size = UDim2.new(0, 14, 0, 14)
+        k.Position = UDim2.new((initial - minV) / (maxV - minV), -7, 0.5, -7)
+        k.BackgroundColor3 = Color3.fromRGB(240, 240, 245); k.BorderSizePixel = 0
+        k.Parent = tr
+        Instance.new("UICorner", k).CornerRadius = UDim.new(1, 0)
 
-        local dragging = false
-        local function updateFromX(x)
-            local rel = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-            local val = math.floor(minVal + rel * (maxVal - minVal))
+        local drag = false
+        local function set(x)
+            local r = math.clamp((x - tr.AbsolutePosition.X) / tr.AbsoluteSize.X, 0, 1)
+            local val = math.floor(minV + r * (maxV - minV))
             val = math.floor(val / 25) * 25
-            local rel2 = (val - minVal) / (maxVal - minVal)
-            fill.Size = UDim2.new(rel2, 0, 1, 0)
-            knob.Position = UDim2.new(rel2, -8, 0.5, -8)
-            lbl.Text = text .. "  •  " .. val
-            pcall(function() callback(val) end)
+            local r2 = (val - minV) / (maxV - minV)
+            fill.Size = UDim2.new(r2, 0, 1, 0)
+            k.Position = UDim2.new(r2, -7, 0.5, -7)
+            v.Text = tostring(val)
+            pcall(function() cb(val) end)
         end
-
-        track.InputBegan:Connect(function(i)
-            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-                dragging = true; updateFromX(i.Position.X)
-            end
+        tr.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = true; set(i.Position.X) end
         end)
         UIS.InputChanged:Connect(function(i)
-            if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-                updateFromX(i.Position.X)
-            end
+            if drag and i.UserInputType == Enum.UserInputType.MouseMovement then set(i.Position.X) end
         end)
         UIS.InputEnded:Connect(function(i)
-            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-                dragging = false
-            end
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
         end)
     end
 
-    local function makeParagraph(parent, title, content_text)
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, 0, 0, 0); frame.AutomaticSize = Enum.AutomaticSize.Y
-        frame.BackgroundColor3 = Color3.fromRGB(28, 22, 44)
-        frame.BorderSizePixel = 0; frame.Parent = parent
-        Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 7)
-        local p = Instance.new("UIPadding", frame)
+    local function para(parent, title, text)
+        local f = Instance.new("Frame")
+        f.Size = UDim2.new(1, 0, 0, 0); f.AutomaticSize = Enum.AutomaticSize.Y
+        f.BackgroundColor3 = PANEL; f.BorderSizePixel = 0; f.Parent = parent
+        Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
+        local p = Instance.new("UIPadding", f)
         p.PaddingTop = UDim.new(0, 8); p.PaddingBottom = UDim.new(0, 8)
         p.PaddingLeft = UDim.new(0, 12); p.PaddingRight = UDim.new(0, 12)
-        local l = Instance.new("UIListLayout", frame)
-        l.Padding = UDim.new(0, 4); l.SortOrder = Enum.SortOrder.LayoutOrder
+        local l = Instance.new("UIListLayout", f)
+        l.Padding = UDim.new(0, 3); l.SortOrder = Enum.SortOrder.LayoutOrder
 
         local t = Instance.new("TextLabel")
-        t.Size = UDim2.new(1, 0, 0, 18); t.BackgroundTransparency = 1
+        t.Size = UDim2.new(1, 0, 0, 14); t.BackgroundTransparency = 1
         t.Text = title; t.TextColor3 = ACCENT
-        t.TextXAlignment = Enum.TextXAlignment.Left
-        t.Font = Enum.Font.GothamBold; t.TextSize = 12; t.Parent = frame
+        t.Font = Enum.Font.GothamBold; t.TextSize = 10
+        t.TextXAlignment = Enum.TextXAlignment.Left; t.Parent = f
 
         local c = Instance.new("TextLabel")
         c.Size = UDim2.new(1, 0, 0, 0); c.AutomaticSize = Enum.AutomaticSize.Y
-        c.BackgroundTransparency = 1; c.Text = content_text
-        c.TextColor3 = TEXT_DIM; c.TextXAlignment = Enum.TextXAlignment.Left
-        c.TextYAlignment = Enum.TextYAlignment.Top; c.TextWrapped = true
-        c.Font = Enum.Font.Gotham; c.TextSize = 11; c.Parent = frame
+        c.BackgroundTransparency = 1; c.Text = text; c.TextColor3 = SUB
+        c.Font = Enum.Font.Gotham; c.TextSize = 11; c.TextWrapped = true
+        c.TextXAlignment = Enum.TextXAlignment.Left
+        c.TextYAlignment = Enum.TextYAlignment.Top; c.Parent = f
     end
 
-    local MainTab = createTab("Main")
-    local GriefTab = createTab("Grief")
-    local PlatformTab = createTab("Platform")
-    local BuildsTab = createTab("Builds")
-    local CreditsTab = createTab("Credits")
+    local Main = tab("Main")
+    local Grief = tab("Grief")
+    local Plat = tab("Platform")
+    local Build = tab("Builds")
+    local Cred = tab("Credits")
 
-    makeSection(MainTab, "F3X / BTOOLS")
-    makeButton(MainTab, "Grab F3X & Return", function() task.spawn(function() pcall(grabAndReturn) end) end)
-    makeButton(MainTab, "Grab Btools & Return", function() task.spawn(function() pcall(grabBtools) end) end)
+    label(Main, "F3X / BTOOLS")
+    btn(Main, "Grab F3X & Return", function() task.spawn(function() pcall(grabAndReturn) end) end)
+    btn(Main, "Grab Btools & Return", function() task.spawn(function() pcall(grabBtools) end) end)
 
-    makeSection(MainTab, "MOVEMENT")
-    makeToggle(MainTab, "Infinite Jump", S.InfJump, function(v) S.InfJump = v; saveCurrentState() end)
+    label(Main, "MOVEMENT")
+    toggle(Main, "Infinite Jump", S.InfJump, function(v) S.InfJump = v; saveCurrentState() end)
 
-    makeSection(MainTab, "VISUAL")
-    makeToggle(MainTab, "Player ESP", S.ESP, function(v)
+    label(Main, "VISUAL")
+    toggle(Main, "Player ESP", S.ESP, function(v)
         S.ESP = v; if not v and cleanESP then cleanESP() end; saveCurrentState()
     end)
 
-    makeSection(MainTab, "ANTI-CHEAT")
-    makeToggle(MainTab, "Anti-Kick", S.AntiKick, function(v) S.AntiKick = v; saveCurrentState() end)
-    makeToggle(MainTab, "Anti-AFK", S.AntiAFK, function(v) S.AntiAFK = v; saveCurrentState() end)
+    label(Main, "ANTI-CHEAT")
+    toggle(Main, "Anti-Kick", S.AntiKick, function(v) S.AntiKick = v; saveCurrentState() end)
+    toggle(Main, "Anti-AFK", S.AntiAFK, function(v) S.AntiAFK = v; saveCurrentState() end)
 
-    makeSection(MainTab, "SERVER")
-    makeButton(MainTab, "Rejoin Server", function() rejoinServer() end)
+    label(Main, "SERVER")
+    btn(Main, "Rejoin Server", function() rejoinServer() end)
 
-    makeSection(MainTab, "KEYBINDS")
-    makeParagraph(MainTab, "Shortcuts",
-        "F = Grab F3X  •  H = ESP  •  J = Inf Jump  •  K = Toggle Menu")
+    label(Grief, "F3X GRIEFING")
+    btn(Grief, "Mass Delete", function() massDelete() end)
+    btn(Grief, "Unanchor All", function() unanchorAll() end)
+    btn(Grief, "Fling Parts", function() flingParts() end)
+    btn(Grief, "Void All", function() voidAll() end)
 
-    makeSection(GriefTab, "F3X GRIEFING")
-    makeButton(GriefTab, "Mass Delete (ALL parts)", function() massDelete() end)
-    makeButton(GriefTab, "Unanchor All (map falls)", function() unanchorAll() end)
-    makeButton(GriefTab, "Fling Parts (chaos)", function() flingParts() end)
-    makeButton(GriefTab, "Void All (to void)", function() voidAll() end)
+    label(Grief, "DEFENSE")
+    btn(Grief, "Anti-F3X (hide others)", function() antiF3X() end)
+    para(Grief, "Warning", "These will lag or crash the server. Use at your own risk.")
 
-    makeSection(GriefTab, "DEFENSE")
-    makeButton(GriefTab, "Anti-F3X (hide others)", function() antiF3X() end)
-    makeParagraph(GriefTab, "Warning", "These will lag or crash the server. Use at your own risk.")
+    label(Plat, "SIZE")
+    slider(Plat, "Platform Size", 10, 1000, S.PlatformSize, function(v) S.PlatformSize = v; saveCurrentState() end)
 
-    makeSection(PlatformTab, "SIZE")
-    makeSlider(PlatformTab, "Platform Size", 10, 1000, S.PlatformSize, function(v)
-        S.PlatformSize = v; saveCurrentState()
-    end)
-    makeSection(PlatformTab, "SQUARE")
-    makeButton(PlatformTab, "Square Below Me", function() platformAtMe(false) end)
-    makeButton(PlatformTab, "Square Above Me", function() platformAtMe(true) end)
-    makeSection(PlatformTab, "CIRCLE")
-    makeButton(PlatformTab, "Circle Below Me", function() circlePlatformAtMe(false) end)
-    makeButton(PlatformTab, "Circle Above Me", function() circlePlatformAtMe(true) end)
-    makeSection(PlatformTab, "CONTROL")
-    makeButton(PlatformTab, "Clear Local Platforms", function() clearPlatforms() end)
+    label(Plat, "SQUARE")
+    btn(Plat, "Square Below Me", function() platformAtMe(false) end)
+    btn(Plat, "Square Above Me", function() platformAtMe(true) end)
 
-    makeSection(BuildsTab, "SPAWN BUILDS")
-    makeButton(BuildsTab, "House", function() spawnHouse() end)
-    makeButton(BuildsTab, "Tower", function() spawnTower() end)
-    makeButton(BuildsTab, "Bridge", function() spawnBridge() end)
-    makeButton(BuildsTab, "Pyramid", function() spawnPyramid() end)
-    makeButton(BuildsTab, "Wall", function() spawnWall() end)
-    makeButton(BuildsTab, "Fountain", function() spawnFountain() end)
-    makeSection(BuildsTab, "CONTROL")
-    makeButton(BuildsTab, "Clear All Local", function() clearPlatforms() end)
+    label(Plat, "CIRCLE")
+    btn(Plat, "Circle Below Me", function() circlePlatformAtMe(false) end)
+    btn(Plat, "Circle Above Me", function() circlePlatformAtMe(true) end)
 
-    makeSection(CreditsTab, "CREDITS")
-    makeParagraph(CreditsTab, "Creator", "Shaw")
-    makeParagraph(CreditsTab, "Discord", "Shaw6000")
+    label(Plat, "CONTROL")
+    btn(Plat, "Clear Local Platforms", function() clearPlatforms() end)
 
-    makeSection(CreditsTab, "SETTINGS")
-    makeButton(CreditsTab, "Change Device (reloads UI)", function()
+    label(Build, "SPAWN BUILDS")
+    btn(Build, "House", function() spawnHouse() end)
+    btn(Build, "Tower", function() spawnTower() end)
+    btn(Build, "Bridge", function() spawnBridge() end)
+    btn(Build, "Pyramid", function() spawnPyramid() end)
+    btn(Build, "Wall", function() spawnWall() end)
+    btn(Build, "Fountain", function() spawnFountain() end)
+
+    label(Build, "CONTROL")
+    btn(Build, "Clear All Local", function() clearPlatforms() end)
+
+    label(Cred, "CREDITS")
+    para(Cred, "Creator", "Shaw")
+    para(Cred, "Discord", "Shaw6000")
+
+    label(Cred, "SETTINGS")
+    btn(Cred, "Change Device (reloads UI)", function()
         S.Device = nil; saveCurrentState()
         notify("Nicotine", "Device reset. Pick again in the prompt.", 3)
         task.wait(0.4)
         sg:Destroy()
         task.spawn(function()
             local c = showDeviceSelector()
+            nukeSelectors()
             if c == "mobile" then buildMobileUI()
             elseif c == "pc" then buildPCUI() end
         end)
@@ -1243,30 +1312,30 @@ buildPCUI = function()
     end
     cl:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvas)
 
-    showPage("Main")
-    task.wait(0.1)
-    currentTabBtn = "Main"
-    showPage("Main")
+    currentTab = "Main"
+    show("Main")
 
     local visible = true
     trk(UIS.InputBegan:Connect(function(input, gp)
         if gp then return end
         if input.KeyCode == Enum.KeyCode.K then
-            visible = not visible
-            win.Visible = visible
-            glow.Visible = visible
+            if win and win.Parent then
+                visible = not visible
+                win.Visible = visible
+            end
         end
     end))
 
     mini.MouseButton1Click:Connect(function()
         visible = false
-        win.Visible = false
-        glow.Visible = false
+        if win and win.Parent then win.Visible = false end
     end)
 
     close.MouseButton1Click:Connect(function()
-        sg:Destroy()
+        pcall(function() sg:Destroy() end)
     end)
+
+    addResizeHandle(win, 400, 300, 1200, 800)
 
     return {Destroy = function() pcall(function() sg:Destroy() end) end}
 end
@@ -1276,19 +1345,23 @@ task.spawn(function()
     if not choice or (choice ~= "mobile" and choice ~= "pc") then
         choice = showDeviceSelector()
     end
+    nukeSelectors()
+
     if choice == "mobile" then
         local success = buildMobileUI()
+        nukeSelectors()
         if success then notify("Nicotine", "Loaded (Mobile UI)", 4)
         else notify("Nicotine", "Failed to load Mobile UI", 4) end
     elseif choice == "pc" then
         buildPCUI()
+        nukeSelectors()
         notify("Nicotine", "Loaded (PC UI) • Press K", 4)
     end
 end)
 
 getgenv().Nicotine = function()
     S.InfJump = false; S.ESP = false; S.AntiKick = false
-    S.AntiAFK = false; S.AutoGrab = false
+    S.AntiAFK = false
     if cleanESP then cleanESP() end
     clearPlatforms()
     for _, c in ipairs(S.Conn) do pcall(function() c:Disconnect() end) end
