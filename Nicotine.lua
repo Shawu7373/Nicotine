@@ -1,11 +1,10 @@
---// NICOTINE | Made by: Shaw | Discord: Shaw6000
---// Fixed bugs + Change Device button + Cool PC UI
 print("[Nicotine] Loading...")
 
 if getgenv().Nicotine then pcall(getgenv().Nicotine) end
 getgenv().Nicotine = function() end
 
-local LOADSTRING = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/Shawu7373/Nicotine/main/Nicotine.lua"))()'
+local F3X_POS = Vector3.new(11, 3, -116)
+local BTOOLS_POS = Vector3.new(30.8, 3.2, -62.3)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -19,7 +18,9 @@ local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local LP = Players.LocalPlayer
 local PG = LP:WaitForChild("PlayerGui", 15)
-if not PG then return end
+if not PG then warn("[Nicotine] PlayerGui missing"); return end
+
+print("[Nicotine] Services OK")
 
 for _, v in ipairs(PG:GetChildren()) do
     if v.Name == "Nicotine" or v.Name == "NicotineSelector" then
@@ -36,18 +37,6 @@ local function notify(t, x, d)
     end) end
 end
 
-local function queueScript()
-    if type(queue_on_teleport) == "function" then
-        pcall(function() queue_on_teleport(LOADSTRING) end); return true
-    elseif type(queueonteleport) == "function" then
-        pcall(function() queueonteleport(LOADSTRING) end); return true
-    end
-    return false
-end
-
--- ============================================================
--- CONFIG
--- ============================================================
 local CONFIG_FOLDER = "Nicotine"
 local CONFIG_FILE = CONFIG_FOLDER .. "/config.json"
 
@@ -83,9 +72,6 @@ end
 
 local saved = loadConfig()
 
--- ============================================================
--- STATE
--- ============================================================
 local S = {
     InfJump = saved.InfJump or false,
     ESP = saved.ESP or false,
@@ -113,9 +99,9 @@ local function getRoot() local c = getChar(); return c and c:FindFirstChild("Hum
 local function getBP() return LP:FindFirstChild("Backpack") end
 local function trk(c) table.insert(S.Conn, c); return c end
 
--- ============================================================
--- ANTI-CHEAT / ANTI-KICK / ANTI-AFK
--- ============================================================
+local buildPCUI
+local buildMobileUI
+
 local function applyAntiKick()
     pcall(function()
         local mt = getrawmetatable(game)
@@ -144,11 +130,8 @@ local function setupAntiAFK()
     end))
 end
 
--- ============================================================
--- F3X
--- ============================================================
-local TOOL_KW = {"building","f3x","btool","b tool","hammer","move","clone","destroy","import","wrench","lpi","resize"}
-local GIVER_KW = {"giver","f3x","btool","b tool","building","wrench","lpi","import"}
+local TOOL_KW = {"building","f3x","btool","b tool","hammer","move","clone","destroy","import","wrench","lpi","resize","gear","tool"}
+local BT_KEYWORDS = {"btool", "b tool", "b-tool", "brick tool", "building tool", "b_tool"}
 
 local function isF3XTool(o)
     if not o or not o:IsA("Tool") then return false end
@@ -157,11 +140,42 @@ local function isF3XTool(o)
     return false
 end
 
+local function isBtools(o)
+    if not o or not o:IsA("Tool") then return false end
+    local n = o.Name:lower()
+    for _, kw in ipairs(BT_KEYWORDS) do if n:find(kw) then return true end end
+    return false
+end
+
 local function hasF3X()
     local c = LP.Character
-    if c then for _, o in ipairs(c:GetChildren()) do if isF3XTool(o) then return o end end end
+    if c then
+        for _, o in ipairs(c:GetChildren()) do
+            if isF3XTool(o) and not isBtools(o) then return o end
+        end
+    end
     local bp = getBP()
-    if bp then for _, o in ipairs(bp:GetChildren()) do if isF3XTool(o) then return o end end end
+    if bp then
+        for _, o in ipairs(bp:GetChildren()) do
+            if isF3XTool(o) and not isBtools(o) then return o end
+        end
+    end
+    return nil
+end
+
+local function hasBtools()
+    local c = LP.Character
+    if c then
+        for _, o in ipairs(c:GetChildren()) do
+            if isBtools(o) then return o end
+        end
+    end
+    local bp = getBP()
+    if bp then
+        for _, o in ipairs(bp:GetChildren()) do
+            if isBtools(o) then return o end
+        end
+    end
     return nil
 end
 
@@ -173,8 +187,16 @@ local function equipF3X()
     return false
 end
 
+local function equipBtools()
+    local t = hasBtools()
+    if not t then return false end
+    local h = getHum()
+    if h then pcall(function() h:EquipTool(t) end); return true end
+    return false
+end
+
 local function getF3XRemotes()
-    local tool = hasF3X()
+    local tool = hasF3X() or hasBtools()
     if not tool then return nil, nil end
     local invokeRemote, eventRemote = nil, nil
     for _, obj in ipairs(tool:GetDescendants()) do
@@ -202,9 +224,6 @@ local function sendF3XCommand(command, args)
     return false
 end
 
--- ============================================================
--- HELPERS
--- ============================================================
 local function makePart(size, color, transparency, material)
     local part = Instance.new("Part")
     part.Size = size; part.Anchored = true; part.CanCollide = true
@@ -221,9 +240,6 @@ local function makePartAt(pos, size, color, transparency, material)
     local p = makePart(size, color, transparency, material); p.Position = pos; return p
 end
 
--- ============================================================
--- PLATFORM
--- ============================================================
 local function platformAtMe(above)
     local root = getRoot()
     if not root then notify("Platform", "No character", 2); return end
@@ -281,9 +297,6 @@ local function clearPlatforms()
     notify("Platform", "Cleared " .. n .. " local parts", 3)
 end
 
--- ============================================================
--- BUILDS
--- ============================================================
 local function spawnHouse()
     local root = getRoot(); if not root then return end
     local base = root.Position + Vector3.new(0, 20, 0)
@@ -378,171 +391,32 @@ local function spawnFountain()
     notify("Builds", "Fountain spawned", 2)
 end
 
--- ============================================================
--- F3X GRABBER
--- ============================================================
-local function partMatches(o)
-    if not o or not o:IsA("BasePart") then return false end
-    local n = o.Name:lower()
-    for _, kw in ipairs(GIVER_KW) do if n:find(kw) then return true end end
-    for _, ch in ipairs(o:GetChildren()) do
-        local cn = ch.Name:lower()
-        for _, kw in ipairs(GIVER_KW) do if cn:find(kw) then return true end end
-    end
-    return false
-end
-
-local function findGivers()
-    local f = {}; local count = 0
-    for _, o in ipairs(Workspace:GetDescendants()) do
-        count = count + 1
-        if partMatches(o) then table.insert(f, o) end
-        if count % 500 == 0 then task.wait() end
-    end
-    return f
-end
-
-local function touch(giver)
-    local r = getRoot()
-    if not r or not giver then return false end
-    if type(firetouchinterest) == "function" then
-        pcall(function()
-            firetouchinterest(giver, r, 0)
-            task.wait(0.05)
-            firetouchinterest(giver, r, 1)
-        end)
-        return true
-    end
-    return false
-end
-
 local function grabAndReturn()
     if S.IsGrabbing then return end
     S.IsGrabbing = true
     local root = getRoot()
-    if not root then S.IsGrabbing = false; notify("Nicotine", "No character", 2); return end
-    if hasF3X() then equipF3X(); S.IsGrabbing = false; notify("Nicotine", "Already have F3X", 2); return end
-    notify("Nicotine", "Scanning map for Givers...", 3)
-    local givers = findGivers()
-    if #givers == 0 then S.IsGrabbing = false; notify("Nicotine", "No giver found", 4); return end
-    local saved2 = root.CFrame
-    notify("Nicotine", "Found " .. #givers .. " givers. Grabbing...", 2)
-    for _, g in ipairs(givers) do
-        pcall(function() root.CFrame = g.CFrame + Vector3.new(0, 1, 0) end)
-        task.wait(0.2); touch(g); task.wait(0.3)
-        if hasF3X() then
-            equipF3X(); task.wait(0.2)
-            pcall(function() root.CFrame = saved2 end)
-            notify("Nicotine", "F3X grabbed!", 3)
-            S.IsGrabbing = false; return
-        end
-    end
-    pcall(function() root.CFrame = saved2 end)
+    if not root then S.IsGrabbing = false; return end
+    if hasF3X() then equipF3X(); S.IsGrabbing = false; return end
+    local savedPos = root.CFrame
+    pcall(function() root.CFrame = CFrame.new(F3X_POS) end)
+    task.wait(1.2)
+    pcall(function() root.CFrame = savedPos end)
     S.IsGrabbing = false
-    notify("Nicotine", "Failed. Try again.", 4)
-end
-
--- ============================================================
--- BTOOLS GRABBER
--- ============================================================
-local function findBtoolsSources()
-    local givers, templates = {}, {}
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            local n = obj.Name:lower()
-            if n:find("btool") or n:find("b tool") or n:find("building tool") or
-               n:find("b-tool") or n:find("brick tool") then
-                table.insert(givers, obj)
-            end
-            local pp = obj:FindFirstChildOfClass("ProximityPrompt")
-            if pp then
-                local a = (pp.ActionText .. " " .. pp.ObjectText):lower()
-                if a:find("btool") or a:find("building tool") or a:find("get tool") then
-                    table.insert(givers, obj)
-                end
-            end
-            local cd = obj:FindFirstChildOfClass("ClickDetector")
-            if cd and (n:find("giver") or n:find("btool") or n:find("tool")) then
-                table.insert(givers, obj)
-            end
-        end
-        if obj:IsA("Tool") and isF3XTool(obj) then
-            table.insert(givers, obj)
-        end
-    end
-    for _, obj in ipairs(RS:GetDescendants()) do
-        if obj:IsA("Tool") then
-            local n = obj.Name:lower()
-            if n:find("btool") or n:find("b tool") or n:find("building tool") or
-               n:find("hammer") or n:find("wrench") or n:find("resize") or
-               n:find("move") or n:find("clone") or n:find("destroy") then
-                table.insert(templates, obj)
-            end
-        end
-    end
-    return givers, templates
 end
 
 local function grabBtools()
     if S.IsGrabbing then return end
     S.IsGrabbing = true
     local root = getRoot()
-    if not root then S.IsGrabbing = false; notify("Btools", "No character", 2); return end
-    if hasF3X() then equipF3X(); S.IsGrabbing = false; notify("Btools", "Already have Btools!", 2); return end
-    notify("Btools", "Deep-scanning game code...", 3)
-    local givers, templates = findBtoolsSources()
-    if #givers == 0 and #templates == 0 then
-        notify("Btools", "No Btools found in this game", 5)
-        S.IsGrabbing = false; return
-    end
-    notify("Btools", "Found " .. #givers .. " givers, " .. #templates .. " templates", 3)
+    if not root then S.IsGrabbing = false; return end
+    if hasBtools() then equipBtools(); S.IsGrabbing = false; return end
     local savedPos = root.CFrame
-    for _, giver in ipairs(givers) do
-        pcall(function() root.CFrame = giver.CFrame + Vector3.new(0, 2, 0) end)
-        task.wait(0.25)
-        local pp = giver:FindFirstChildOfClass("ProximityPrompt")
-        if pp then
-            pcall(function()
-                pp:InputHoldBegin()
-                task.wait((pp.HoldDuration or 0) + 0.15)
-                pp:InputHoldEnd()
-            end)
-            task.wait(0.2)
-        end
-        local cd = giver:FindFirstChildOfClass("ClickDetector")
-        if cd and type(fireclickdetector) == "function" then
-            pcall(function() fireclickdetector(cd) end)
-            task.wait(0.2)
-        end
-        touch(giver)
-        task.wait(0.3)
-        if hasF3X() then
-            equipF3X()
-            pcall(function() root.CFrame = savedPos end)
-            notify("Btools", "Btools grabbed!", 3)
-            S.IsGrabbing = false; return
-        end
-    end
+    pcall(function() root.CFrame = CFrame.new(BTOOLS_POS) end)
+    task.wait(1.2)
     pcall(function() root.CFrame = savedPos end)
     S.IsGrabbing = false
-    notify("Btools", "Grab failed. Try manually touching the giver.", 5)
 end
 
--- ============================================================
--- AUTO GRAB LOOP
--- ============================================================
-task.spawn(function()
-    while getgenv().Nicotine do
-        task.wait(10)
-        if S.AutoGrab and not S.IsGrabbing and not hasF3X() then
-            task.spawn(grabAndReturn)
-        end
-    end
-end)
-
--- ============================================================
--- GRIEFING
--- ============================================================
 local function massDelete()
     local inv, ev = getF3XRemotes()
     if not inv and not ev then notify("Grief", "F3X not equipped.", 3); return end
@@ -620,40 +494,12 @@ local function antiF3X()
     notify("Grief", "Done!", 3)
 end
 
--- ============================================================
--- SERVER
--- ============================================================
-local function serverHop()
-    saveCurrentState()
-    if queueScript() then notify("Nicotine", "Will auto-reload after hop", 3) end
-    task.wait(0.3)
-    notify("Nicotine", "Finding most popular server...", 3)
-    local ok, err = pcall(function()
-        local req = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100&sortOrder=Desc")
-        local data = HttpService:JSONDecode(req)
-        if not data or not data.data then error("No server data") end
-        local best, bestCount = nil, -1
-        for _, srv in ipairs(data.data) do
-            if srv.id ~= game.JobId and srv.playing < srv.maxPlayers then
-                if srv.playing > bestCount then best = srv; bestCount = srv.playing end
-            end
-        end
-        if not best then error("No available servers") end
-        notify("Nicotine", "Joining server with " .. best.playing .. " players", 3)
-        TeleportService:TeleportToPlaceInstance(game.PlaceId, best.id, LP)
-    end)
-    if not ok then notify("Nicotine", "Hop failed: " .. tostring(err), 4) end
-end
-
 local function rejoinServer()
-    saveCurrentState(); queueScript()
+    saveCurrentState()
     notify("Nicotine", "Rejoining...", 2); task.wait(0.3)
     pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
 end
 
--- ============================================================
--- INFINITE JUMP
--- ============================================================
 trk(UIS.JumpRequest:Connect(function()
     if not S.InfJump then return end
     local h = getHum(); if not h then return end
@@ -667,9 +513,6 @@ trk(UIS.JumpRequest:Connect(function()
     end
 end))
 
--- ============================================================
--- ESP
--- ============================================================
 local cleanESP = nil
 local function makeESP(target, color)
     if not target or S.ESPObjects[target] then return end
@@ -734,13 +577,10 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
--- PC KEYBINDS
--- ============================================================
 trk(UIS.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-    if input.KeyCode == S.AutoGrabKey then task.spawn(grabAndReturn) end
+    if input.KeyCode == S.AutoGrabKey then task.spawn(function() pcall(grabAndReturn) end) end
     if input.KeyCode == Enum.KeyCode.H then
         S.ESP = not S.ESP
         if not S.ESP and cleanESP then cleanESP() end
@@ -751,104 +591,76 @@ trk(UIS.InputBegan:Connect(function(input, gameProcessed)
     end
 end))
 
--- ============================================================
--- DEVICE SELECTOR (FIXED - RETURNS VALUE CORRECTLY)
--- ============================================================
 local function showDeviceSelector()
-    local chosen = nil
     local sg = Instance.new("ScreenGui")
-    sg.Name = "NicotineSelector"; sg.ResetOnSpawn = false
-    sg.IgnoreGuiInset = true; sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.Name = "NicotineSelector"
+    sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     sg.Parent = PG
 
-    local overlay = Instance.new("Frame")
-    overlay.Size = UDim2.new(1, 0, 1, 0)
-    overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    overlay.BackgroundTransparency = 0.4
-    overlay.BorderSizePixel = 0; overlay.Parent = sg
-
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 400, 0, 300)
-    frame.Position = UDim2.new(0.5, -200, 0.5, -150)
-    frame.BackgroundColor3 = Color3.fromRGB(20, 18, 28)
-    frame.BorderSizePixel = 0; frame.Parent = sg
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 16)
+    frame.Size = UDim2.new(0, 320, 0, 190)
+    frame.Position = UDim2.new(0.5, -160, 0.5, -95)
+    frame.BackgroundColor3 = Color3.fromRGB(20, 15, 30)
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.Draggable = true
+    frame.Parent = sg
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
     local stroke = Instance.new("UIStroke", frame)
-    stroke.Color = Color3.fromRGB(120, 80, 200); stroke.Thickness = 2
-
-    local grad = Instance.new("UIGradient", frame)
-    grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 22, 45)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 16, 28))
-    })
-    grad.Rotation = 135
+    stroke.Color = Color3.fromRGB(160, 100, 255)
+    stroke.Thickness = 2
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 50); title.Position = UDim2.new(0, 0, 0, 20)
-    title.BackgroundTransparency = 1; title.Text = "NICOTINE"
-    title.TextColor3 = Color3.fromRGB(200, 160, 255)
-    title.Font = Enum.Font.GothamBold; title.TextSize = 30; title.Parent = frame
+    title.Size = UDim2.new(1, 0, 0, 50)
+    title.BackgroundTransparency = 1
+    title.Text = "Nicotine"
+    title.TextColor3 = Color3.fromRGB(230, 225, 245)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 22
+    title.Parent = frame
 
     local sub = Instance.new("TextLabel")
-    sub.Size = UDim2.new(1, -40, 0, 30); sub.Position = UDim2.new(0, 20, 0, 65)
+    sub.Size = UDim2.new(1, 0, 0, 20)
+    sub.Position = UDim2.new(0, 0, 0, 45)
     sub.BackgroundTransparency = 1
-    sub.Text = "What device are you on?"
-    sub.TextColor3 = Color3.fromRGB(200, 200, 210)
-    sub.Font = Enum.Font.Gotham; sub.TextSize = 15; sub.Parent = frame
+    sub.Text = "Select your device"
+    sub.TextColor3 = Color3.fromRGB(140, 130, 170)
+    sub.Font = Enum.Font.Gotham
+    sub.TextSize = 13
+    sub.Parent = frame
 
-    local function makeBtn(text, yPos, color1, color2, key)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -50, 0, 60)
-        btn.Position = UDim2.new(0, 25, 0, yPos)
-        btn.BackgroundColor3 = Color3.fromRGB(50, 40, 70)
-        btn.Text = ""; btn.AutoButtonColor = false
-        btn.BorderSizePixel = 0; btn.Parent = frame
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
-        local bGrad = Instance.new("UIGradient", btn)
-        bGrad.Color = ColorSequence.new(color1, color2)
-        bGrad.Rotation = 45
-        local bStroke = Instance.new("UIStroke", btn)
-        bStroke.Color = color1; bStroke.Thickness = 1.5
+    local choice = nil
 
-        local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, 0, 1, 0); lbl.BackgroundTransparency = 1
-        lbl.Text = text; lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-        lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 18; lbl.Parent = btn
-
-        btn.MouseEnter:Connect(function()
-            TweenService:Create(btn, TweenInfo.new(0.2), {Size = UDim2.new(1, -40, 0, 64)}):Play()
-        end)
-        btn.MouseLeave:Connect(function()
-            TweenService:Create(btn, TweenInfo.new(0.2), {Size = UDim2.new(1, -50, 0, 60)}):Play()
-        end)
-        btn.MouseButton1Click:Connect(function()
-            if chosen then return end
-            chosen = key
-            S.Device = key
+    local function mkBtn(txt, xPos, val)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0.4, 0, 0, 46)
+        b.Position = UDim2.new(xPos, 0, 0, 105)
+        b.BackgroundColor3 = Color3.fromRGB(60, 40, 100)
+        b.Text = txt
+        b.TextColor3 = Color3.fromRGB(255, 255, 255)
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 16
+        b.BorderSizePixel = 0
+        b.Parent = frame
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+        b.MouseButton1Click:Connect(function()
+            choice = val
+            S.Device = val
             saveCurrentState()
             sg:Destroy()
         end)
     end
 
-    makeBtn("📱  Mobile (Phone / Tablet)", 110, Color3.fromRGB(90, 110, 220), Color3.fromRGB(140, 80, 220), "mobile")
-    makeBtn("💻  PC / Laptop", 185, Color3.fromRGB(60, 160, 110), Color3.fromRGB(40, 120, 90), "pc")
+    mkBtn("PC",     0.06, "pc")
+    mkBtn("Mobile", 0.54, "mobile")
 
-    local hint = Instance.new("TextLabel")
-    hint.Size = UDim2.new(1, -40, 0, 18); hint.Position = UDim2.new(0, 20, 0, 262)
-    hint.BackgroundTransparency = 1
-    hint.Text = "You can change this later in the Credits tab."
-    hint.TextColor3 = Color3.fromRGB(140, 140, 150)
-    hint.Font = Enum.Font.Gotham; hint.TextSize = 11; hint.Parent = frame
-
-    while not chosen do task.wait(0.1) end
-    return chosen
+    while choice == nil and sg.Parent do task.wait(0.1) end
+    return choice or "pc"
 end
 
--- ============================================================
--- MOBILE UI (RAYFIELD)
--- ============================================================
-local RayfieldInstance = nil
-local function buildMobileUI()
+buildMobileUI = function()
     local Rayfield
     local srcs = {
         "https://sirius.menu/rayfield",
@@ -868,7 +680,7 @@ local function buildMobileUI()
         if lib and type(lib) == "table" and lib.CreateWindow then Rayfield = lib; break end
     end
     if not Rayfield then notify("Nicotine", "Rayfield failed", 6); return nil end
-    RayfieldInstance = Rayfield
+    local RayfieldInstance = Rayfield
 
     local Window = Rayfield:CreateWindow({
         Name = "Nicotine", LoadingTitle = "Nicotine", LoadingSubtitle = "Mobile",
@@ -882,10 +694,8 @@ local function buildMobileUI()
     local CreditsTab = Window:CreateTab("Credits", 4483362458)
 
     MainTab:CreateSection("F3X / Btools")
-    MainTab:CreateButton({Name = "Grab F3X & Return", Callback = function() task.spawn(grabAndReturn) end})
-    MainTab:CreateButton({Name = "Grab Btools & Return", Callback = function() task.spawn(grabBtools) end})
-    MainTab:CreateToggle({Name = "Auto Grab (every 10s)", CurrentValue = S.AutoGrab, Flag = "AutoGrabToggle",
-        Callback = function(v) S.AutoGrab = v; saveCurrentState() end})
+    MainTab:CreateButton({Name = "Grab F3X & Return", Callback = function() task.spawn(function() pcall(grabAndReturn) end) end})
+    MainTab:CreateButton({Name = "Grab Btools & Return", Callback = function() task.spawn(function() pcall(grabBtools) end) end})
     MainTab:CreateSection("Movement")
     MainTab:CreateToggle({Name = "Infinite Jump", CurrentValue = S.InfJump, Flag = "InfJumpToggle",
         Callback = function(v) S.InfJump = v; saveCurrentState() end})
@@ -898,7 +708,6 @@ local function buildMobileUI()
     MainTab:CreateToggle({Name = "Anti-AFK", CurrentValue = S.AntiAFK, Flag = "AntiAFKToggle",
         Callback = function(v) S.AntiAFK = v; saveCurrentState() end})
     MainTab:CreateSection("Server")
-    MainTab:CreateButton({Name = "Hop to Most Popular", Callback = function() serverHop() end})
     MainTab:CreateButton({Name = "Rejoin Server", Callback = function() rejoinServer() end})
 
     GriefTab:CreateSection("F3X Griefing")
@@ -939,7 +748,7 @@ local function buildMobileUI()
         S.Device = nil; saveCurrentState()
         notify("Nicotine", "Device reset. Re-execute to pick again.", 4)
         task.wait(1)
-        if RayfieldInstance then pcall(function() RayfieldInstance:Destroy() end) end
+        pcall(function() RayfieldInstance:Destroy() end)
         task.spawn(function()
             local c = showDeviceSelector()
             if c == "mobile" then buildMobileUI()
@@ -950,13 +759,7 @@ local function buildMobileUI()
     return Rayfield
 end
 
--- ============================================================
--- COOL PC UI
--- ============================================================
-local pcUIInstance = nil
-
-local function buildPCUI()
-    -- palette
+buildPCUI = function()
     local BG_DARK = Color3.fromRGB(14, 12, 20)
     local BG_MID = Color3.fromRGB(22, 18, 32)
     local BG_PANEL = Color3.fromRGB(28, 22, 44)
@@ -970,7 +773,6 @@ local function buildPCUI()
     sg.Name = "Nicotine"; sg.ResetOnSpawn = false; sg.IgnoreGuiInset = true
     sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; sg.Parent = PG
 
-    -- ambient glow behind window
     local glow = Instance.new("Frame")
     glow.Size = UDim2.new(0, 680, 0, 500)
     glow.Position = UDim2.new(0.5, -340, 0.5, -250)
@@ -998,14 +800,16 @@ local function buildPCUI()
     })
     winGrad.Rotation = 135
 
-    -- animated top bar (gradient shifting)
     local tb = Instance.new("Frame")
     tb.Size = UDim2.new(1, 0, 0, 44); tb.BackgroundColor3 = BG_MID
     tb.BorderSizePixel = 0; tb.ZIndex = 2; tb.Parent = win
     Instance.new("UICorner", tb).CornerRadius = UDim.new(0, 14)
+
     local tbFix = Instance.new("Frame")
-    tbFix.Size = UDim2.new(1, 0, 0, 14); tbFix.Position = UDim2.new(0, 0, 1, -14)
+    tbFix.Size = UDim2.new(1, 0, 0, 14)
+    tbFix.Position = UDim2.new(0, 0, 1, -14)
     tbFix.BackgroundColor3 = BG_MID; tbFix.BorderSizePixel = 0; tbFix.ZIndex = 2; tbFix.Parent = tb
+
     local tbGrad = Instance.new("UIGradient", tb)
     tbGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 30, 90)),
@@ -1014,7 +818,6 @@ local function buildPCUI()
     })
     tbGrad.Rotation = 0
 
-    -- animated gradient shift
     task.spawn(function()
         local t = 0
         while win.Parent do
@@ -1051,13 +854,13 @@ local function buildPCUI()
     version.Font = Enum.Font.Gotham; version.TextSize = 11
     version.ZIndex = 3; version.Parent = tb
 
-    -- status dot (blinks green = active)
     local statusDot = Instance.new("Frame")
     statusDot.Size = UDim2.new(0, 10, 0, 10)
     statusDot.Position = UDim2.new(1, -110, 0.5, -5)
     statusDot.BackgroundColor3 = Color3.fromRGB(80, 220, 120)
     statusDot.BorderSizePixel = 0; statusDot.ZIndex = 3; statusDot.Parent = tb
     Instance.new("UICorner", statusDot).CornerRadius = UDim.new(1, 0)
+
     local statusLbl = Instance.new("TextLabel")
     statusLbl.Size = UDim2.new(0, 70, 1, 0); statusLbl.Position = UDim2.new(1, -95, 0, 0)
     statusLbl.BackgroundTransparency = 1; statusLbl.Text = "Active"
@@ -1065,6 +868,7 @@ local function buildPCUI()
     statusLbl.TextXAlignment = Enum.TextXAlignment.Left
     statusLbl.Font = Enum.Font.GothamSemibold; statusLbl.TextSize = 11
     statusLbl.ZIndex = 3; statusLbl.Parent = tb
+
     task.spawn(function()
         while statusDot.Parent do
             TweenService:Create(statusDot, TweenInfo.new(0.6), {BackgroundTransparency = 0.5}):Play()
@@ -1074,7 +878,6 @@ local function buildPCUI()
         end
     end)
 
-    -- minimize / close
     local mini = Instance.new("TextButton")
     mini.Size = UDim2.new(0, 24, 0, 24); mini.Position = UDim2.new(1, -64, 0, 10)
     mini.BackgroundColor3 = Color3.fromRGB(90, 70, 130); mini.Text = "–"
@@ -1089,7 +892,6 @@ local function buildPCUI()
     close.TextSize = 12; close.BorderSizePixel = 0; close.ZIndex = 3; close.Parent = tb
     Instance.new("UICorner", close).CornerRadius = UDim.new(0, 6)
 
-    -- sidebar
     local sidebar = Instance.new("Frame")
     sidebar.Size = UDim2.new(0, 140, 1, -60); sidebar.Position = UDim2.new(0, 12, 0, 52)
     sidebar.BackgroundColor3 = BG_PANEL; sidebar.BorderSizePixel = 0
@@ -1107,13 +909,11 @@ local function buildPCUI()
     sp.PaddingTop = UDim.new(0, 8); sp.PaddingLeft = UDim.new(0, 8)
     sp.PaddingRight = UDim.new(0, 8)
 
-    -- animated tab indicator
     local indicator = Instance.new("Frame")
     indicator.Size = UDim2.new(0, 3, 0, 0); indicator.BackgroundColor3 = ACCENT
     indicator.BorderSizePixel = 0; indicator.ZIndex = 5; indicator.Parent = sidebar
     Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
 
-    -- content scroller
     local content = Instance.new("ScrollingFrame")
     content.Size = UDim2.new(1, -172, 1, -70); content.Position = UDim2.new(0, 164, 0, 52)
     content.BackgroundTransparency = 1; content.BorderSizePixel = 0
@@ -1359,7 +1159,6 @@ local function buildPCUI()
         c.Font = Enum.Font.Gotham; c.TextSize = 11; c.Parent = frame
     end
 
-    -- build tabs
     local MainTab = createTab("Main")
     local GriefTab = createTab("Grief")
     local PlatformTab = createTab("Platform")
@@ -1367,9 +1166,8 @@ local function buildPCUI()
     local CreditsTab = createTab("Credits")
 
     makeSection(MainTab, "F3X / BTOOLS")
-    makeButton(MainTab, "Grab F3X & Return", function() task.spawn(grabAndReturn) end)
-    makeButton(MainTab, "Grab Btools & Return", function() task.spawn(grabBtools) end)
-    makeToggle(MainTab, "Auto Grab (every 10s)", S.AutoGrab, function(v) S.AutoGrab = v; saveCurrentState() end)
+    makeButton(MainTab, "Grab F3X & Return", function() task.spawn(function() pcall(grabAndReturn) end) end)
+    makeButton(MainTab, "Grab Btools & Return", function() task.spawn(function() pcall(grabBtools) end) end)
 
     makeSection(MainTab, "MOVEMENT")
     makeToggle(MainTab, "Infinite Jump", S.InfJump, function(v) S.InfJump = v; saveCurrentState() end)
@@ -1384,7 +1182,6 @@ local function buildPCUI()
     makeToggle(MainTab, "Anti-AFK", S.AntiAFK, function(v) S.AntiAFK = v; saveCurrentState() end)
 
     makeSection(MainTab, "SERVER")
-    makeButton(MainTab, "Hop to Most Popular", function() serverHop() end)
     makeButton(MainTab, "Rejoin Server", function() rejoinServer() end)
 
     makeSection(MainTab, "KEYBINDS")
@@ -1441,7 +1238,6 @@ local function buildPCUI()
         end)
     end)
 
-    -- auto-resize canvas
     local function updateCanvas()
         content.CanvasSize = UDim2.new(0, 0, 0, cl.AbsoluteContentSize.Y + 20)
     end
@@ -1452,7 +1248,6 @@ local function buildPCUI()
     currentTabBtn = "Main"
     showPage("Main")
 
-    -- toggle with K
     local visible = true
     trk(UIS.InputBegan:Connect(function(input, gp)
         if gp then return end
@@ -1473,30 +1268,24 @@ local function buildPCUI()
         sg:Destroy()
     end)
 
-    pcUIInstance = {Destroy = function() pcall(function() sg:Destroy() end) end}
-    return pcUIInstance
+    return {Destroy = function() pcall(function() sg:Destroy() end) end}
 end
 
--- ============================================================
--- MAIN LOAD (FIXED - PROPERLY AWAITS SELECTOR)
--- ============================================================
 task.spawn(function()
     local choice = S.Device
     if not choice or (choice ~= "mobile" and choice ~= "pc") then
         choice = showDeviceSelector()
     end
     if choice == "mobile" then
-        buildMobileUI()
-        notify("Nicotine", "Loaded (Mobile UI)", 4)
+        local success = buildMobileUI()
+        if success then notify("Nicotine", "Loaded (Mobile UI)", 4)
+        else notify("Nicotine", "Failed to load Mobile UI", 4) end
     elseif choice == "pc" then
         buildPCUI()
         notify("Nicotine", "Loaded (PC UI) • Press K", 4)
     end
 end)
 
--- ============================================================
--- CLEANUP
--- ============================================================
 getgenv().Nicotine = function()
     S.InfJump = false; S.ESP = false; S.AntiKick = false
     S.AntiAFK = false; S.AutoGrab = false
@@ -1504,7 +1293,6 @@ getgenv().Nicotine = function()
     clearPlatforms()
     for _, c in ipairs(S.Conn) do pcall(function() c:Disconnect() end) end
     S.Conn = {}
-    if RayfieldInstance then pcall(function() RayfieldInstance:Destroy() end) end
     for _, v in ipairs(PG:GetChildren()) do
         if v.Name == "Nicotine" or v.Name == "NicotineSelector" then
             pcall(function() v:Destroy() end)
